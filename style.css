@@ -243,11 +243,18 @@ button.history-remove{flex:none;width:32px;height:32px;padding:0;border:0;font-s
 .tpl-num{white-space:nowrap}
 
 /* ---- collapsible result boxes (Evidence, Your rules) ----
+<<<<<<< Updated upstream
    The summary carries a one-line state so a collapsed box still says what it holds. */
 .box-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;cursor:pointer;list-style:none}
+=======
+   Same .card and heading language as the rest of the page; the summary carries a
+   one-line state so a collapsed box still says what it holds. */
+.box-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;cursor:pointer;list-style:none;position:relative;padding-right:20px}
+>>>>>>> Stashed changes
 .box-head::-webkit-details-marker{display:none}
 .box-head h2{margin:0}
-.box-head .mark{margin-left:auto;color:var(--mute);font-size:13px;line-height:1}
+/* Out of flow: the arrow can never wrap to its own line and add height to the box. */
+.box-head .mark{position:absolute;right:0;top:0;color:var(--mute);font-size:13px;line-height:1.6}
 .box-head .mark::before{content:"▸ "}
 details[open]>.box-head .mark::before{content:"▾ "}
 .box-head:hover h2{text-decoration:underline}
