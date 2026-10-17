@@ -1,0 +1,137 @@
+import { normalizeRules, checklistName } from './checklists.js';
+
+export function mountAccount(client, { getRules, setRules }) {
+  const $ = id => document.getElementById(id);
+  const status = (message, error = false) => {
+    $('accountStatus').textContent = message;
+    $('accountStatus').classList.toggle('error', error);
+  };
+  if (!client) {
+    status('Accounts are not configured on this copy. You can still analyze recordings and import or export checklists.');
+    return;
+  }
+  let session = null, recovery = false, busy = false, generation = 0;
+  let saved = [];
+  const redirectTo = new URL('app.html', location.href).href;
+  function render() {
+    $('authForm').hidden = !!session;
+    $('signedIn').hidden = !session;
+    $('recoveryForm').hidden = !recovery || !session;
+    $('cloud').hidden = !session || recovery;
+    $('accountEmail').textContent = session?.user.email ?? '';
+    $('savedChecklists').replaceChildren(...saved.map(item => Object.assign(document.createElement('option'), { value: item.id, textContent: item.name })));
+    $('savedChecklists').disabled = !saved.length || busy;
+    $('loadChecklist').disabled = !saved.length || busy;
+    $('deleteChecklist').disabled = !saved.length || busy;
+    $('saveChecklist').disabled = busy;
+    $('account').querySelectorAll('button').forEach(button => { if (!['loadChecklist', 'deleteChecklist', 'saveChecklist'].includes(button.id)) button.disabled = busy; });
+  }
+  async function refreshSaved(version) {
+    const { data, error } = await client.from('checklists').select('id,name,created_at').order('created_at', { ascending: false });
+    if (version !== generation) return;
+    if (error) throw error;
+    saved = data;
+    render();
+  }
+  async function run(action) {
+    if (busy) return;
+    busy = true; render(); status('Working…');
+    const version = generation;
+    try { await action(version); }
+    catch (error) { if (version === generation) status(error.message || 'Request failed. Please try again.', true); }
+    finally { busy = false; render(); }
+  }
+  client.auth.onAuthStateChange((event, next) => {
+    const changed = session?.user.id !== next?.user.id;
+    session = next;
+    if (event === 'PASSWORD_RECOVERY') recovery = true;
+    if (!session) recovery = false;
+    if (changed || event === 'INITIAL_SESSION') {
+      generation++;
+      saved = [];
+      status(session ? 'Loading your checklists…' : 'Sign in to save checklists across devices.');
+      const version = generation;
+      // Run database requests outside the auth callback so token refresh can finish.
+      if (session) setTimeout(() => refreshSaved(version).then(() => {
+        if (version === generation) status(recovery ? 'Choose a new password.' : 'Your checklists are private to your account.');
+      }).catch(() => { if (version === generation) status('Could not load checklists. Use Refresh to retry.', true); }), 0);
+    }
+    render();
+  });
+  $('authForm').onsubmit = event => {
+    event.preventDefault();
+    const action = event.submitter?.value ?? 'login';
+    run(async () => {
+      const email = $('email').value.trim(), password = $('password').value;
+      let result;
+      if (action === 'reset') {
+        result = await client.auth.resetPasswordForEmail(email, { redirectTo });
+      } else if (action === 'signup') {
+        if (password.length < 8) throw new Error('Use a password with at least 8 characters.');
+        result = await client.auth.signUp({ email, password, options: { emailRedirectTo: redirectTo } });
+      } else {
+        result = await client.auth.signInWithPassword({ email, password });
+      }
+      if (result.error) throw result.error;
+      $('password').value = '';
+      if (action === 'reset') status('If that address has an account, a password reset email is on its way.');
+      else if (action === 'signup' && !result.data.session) status('Check your email to confirm your account, then sign in.');
+      else status('Signed in. Your checklists are private to your account.');
+    });
+  };
+  $('forgotPassword').onclick = () => { $('password').required = false; };
+  for (const id of ['login', 'signup']) $(id).onclick = () => { $('password').required = true; };
+  $('signOut').onclick = () => run(async () => {
+    const { error } = await client.auth.signOut({ scope: 'local' });
+    if (error) throw error;
+    status('Signed out. The recording and current checklist remain in this browser tab.');
+  });
+  $('recoveryForm').onsubmit = event => {
+    event.preventDefault();
+    run(async () => {
+      const { error } = await client.auth.updateUser({ password: $('newPassword').value });
+      if (error) throw error;
+      $('newPassword').value = ''; recovery = false;
+      status('Password updated.');
+    });
+  };
+  $('refreshChecklists').onclick = () => run(async version => { await refreshSaved(version); if (version === generation) status('Checklists refreshed.'); });
+  $('saveForm').onsubmit = event => {
+    event.preventDefault();
+    const user = session?.user;
+    if (!user) return;
+    run(async version => {
+      const name = checklistName($('checklistName').value);
+      const rules = normalizeRules(getRules());
+      const { error } = await client.from('checklists').insert({ user_id: user.id, name, rules });
+      if (version !== generation) return;
+      if (error) throw error;
+      await refreshSaved(version);
+      if (version === generation) status('Checklist saved.');
+    });
+  };
+  $('loadChecklist').onclick = () => {
+    const id = $('savedChecklists').value;
+    run(async version => {
+      const { data, error } = await client.from('checklists').select('rules').eq('id', id).single();
+      if (version !== generation) return;
+      if (error) throw error;
+      // Loading is explicit; never replace work silently during login or refresh.
+      if (!confirm('Replace the current checklist with this saved checklist?')) { status('Current checklist kept.'); return; }
+      setRules(normalizeRules(data.rules)); status('Checklist loaded.');
+    });
+  };
+  $('deleteChecklist').onclick = () => {
+    const id = $('savedChecklists').value;
+    if (!confirm('Delete this saved checklist? The current checklist will stay in this tab.')) return;
+    run(async version => {
+      const { data, error } = await client.from('checklists').delete().eq('id', id).select('id');
+      if (version !== generation) return;
+      if (error) throw error;
+      if (!data.length) throw new Error('This checklist no longer exists. Refresh the list.');
+      await refreshSaved(version);
+      if (version === generation) status('Saved checklist deleted.');
+    });
+  };
+  render();
+}

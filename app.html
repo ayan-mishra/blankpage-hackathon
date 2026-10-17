@@ -19,11 +19,35 @@
   <p class="tag">Check an EEG recording you’ve collected. No experience needed: every result comes with a plain-English reason.</p>
 </header>
 <main>
+  <section id="account" class="card" aria-labelledby="accountHeading">
+    <div class="row-head"><h2 id="accountHeading">Your account</h2><span class="hint">Save your standards. Keep recordings local.</span></div>
+    <form id="authForm" hidden>
+      <div class="row account-fields">
+        <label>Email<input id="email" type="email" autocomplete="email" required maxlength="254"></label>
+        <label>Password<input id="password" type="password" autocomplete="current-password" required maxlength="128"></label>
+      </div>
+      <div class="row">
+        <button id="login" name="action" value="login">Sign in</button>
+        <button id="signup" name="action" value="signup" class="ghost">Create account</button>
+        <button id="forgotPassword" name="action" value="reset" class="ghost">Send password reset</button>
+      </div>
+    </form>
+    <div id="signedIn" hidden><div class="row"><span id="accountEmail"></span><button id="signOut" class="ghost">Sign out</button></div></div>
+    <form id="recoveryForm" hidden>
+      <div class="row"><label>New password<input id="newPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label><button>Update password</button></div>
+    </form>
+    <div id="cloud" hidden>
+      <form id="saveForm" class="row"><label>Checklist name<input id="checklistName" maxlength="80" required placeholder="e.g. Sleep lab standard"></label><button id="saveChecklist">Save current checklist</button></form>
+      <div class="row"><label>Saved checklists<select id="savedChecklists"></select></label><button id="loadChecklist" class="ghost">Load</button><button id="deleteChecklist" class="ghost">Delete</button><button id="refreshChecklists" class="ghost">Refresh</button></div>
+      <p class="hint">Each save creates a private snapshot. Only rules and the checklist name are stored.</p>
+    </div>
+    <p id="accountStatus" class="hint" role="status" aria-live="polite">Connecting to your account…</p>
+  </section>
   <section id="load" class="card">
     <label class="drop" id="drop">
       <input type="file" id="file" accept=".edf,.EDF" hidden>
       <strong>Drop an EDF recording</strong> or click to choose
-      <span>Everything runs in your browser. Nothing is uploaded.</span>
+      <span>EEG recordings stay in your browser. Only checklists you save go to your account.</span>
     </label>
     <button id="demo" class="ghost">Try the demo recording</button>
     <p id="error" role="alert"></p>
