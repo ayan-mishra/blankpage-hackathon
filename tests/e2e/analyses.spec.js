@@ -192,10 +192,8 @@ test('sidebar follows the app theme and fits a phone without overflow', async ({
   // The sidebar is a normal card, not a new design language.
   const card = page.locator('#history');
   await expect(card).toHaveClass(/card/);
-  const border = await card.evaluate(el => getComputedStyle(el).borderTopWidth);
-  const shadow = await card.evaluate(el => getComputedStyle(el).boxShadow);
-  expect(border).toBe('2px');
-  expect(shadow).toContain('rgb(242, 169, 0)');
+  const look = (el) => { const c = getComputedStyle(el); return [c.borderTopWidth, c.borderTopColor, c.borderRadius, c.boxShadow, c.backgroundColor]; };
+  expect(await card.evaluate(look)).toEqual(await page.locator('#load').evaluate(look));
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(rows(page)).toBeVisible();

@@ -51,3 +51,25 @@ test('spike raises kurtosis; flat run detected', () => {
   y.fill(1, 100, 600);
   assert.ok(Math.abs(windowMetrics(y, 100, 10)[0].flat - 0.5) < 0.02);
 });
+
+test('tabulated line power matches the direct DFT projection exactly', () => {
+  const r = rng(11), fs = 256, N = 512;
+  const x = Float32Array.from({ length: N * 3 }, (_, i) => gauss(r) * 10 + 30 * Math.sin((2 * Math.PI * 60 * i) / fs));
+  const direct = (off, f) => {
+    let mean = 0;
+    for (let i = 0; i < N; i++) mean += x[off + i];
+    mean /= N;
+    let m2 = 0, re = 0, im = 0;
+    const step = (2 * Math.PI * f) / fs;
+    for (let i = 0; i < N; i++) {
+      const d = x[off + i] - mean;
+      m2 += d * d; re += d * Math.cos(step * i); im += d * Math.sin(step * i);
+    }
+    m2 /= N;
+    return (2 * (re * re + im * im)) / (N * N * m2);
+  };
+  windowMetrics(x, fs, N / fs).forEach((w, k) => {
+    assert.equal(w.line50, direct(k * N, 50));
+    assert.equal(w.line60, direct(k * N, 60));
+  });
+});

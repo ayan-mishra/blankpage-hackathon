@@ -23,3 +23,21 @@ test('names are trimmed and bounded', () => {
   assert.equal(checklistName('  My lab  '), 'My lab');
   for (const input of ['', '   ', null, 4, 'a'.repeat(81)]) assert.throws(() => checklistName(input), /name/i);
 });
+
+test('saved checklist round-trips and ignores bad or blocked storage', async () => {
+  const { readSaved, writeSaved, SAVED_KEY } = await import('../src/checklists.js');
+  const mem = () => { const m = new Map(); return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) }; };
+  const s = mem();
+  assert.equal(readSaved(s), null);
+  const mine = [...DEFAULT_CHECKLIST, { id: 'r1', name: 'Mine', metric: 'ptp', op: '>', value: 150 }];
+  writeSaved(mine, s);
+  assert.deepEqual(readSaved(s), mine);
+  writeSaved(null, s);
+  assert.equal(readSaved(s), null);
+  for (const bad of ['not json', '{"rules":[{"metric":"__proto__","op":">","value":1}]}', '{}', 'null']) {
+    s.setItem(SAVED_KEY, bad); assert.equal(readSaved(s), null);
+  }
+  const blocked = { getItem() { throw new Error('denied'); }, setItem() { throw new Error('denied'); }, removeItem() { throw new Error('denied'); } };
+  assert.equal(readSaved(blocked), null);
+  assert.doesNotThrow(() => writeSaved(mine, blocked));
+});

@@ -34,3 +34,12 @@ test('rejects hostile headers before allocating', () => {
   const sprOff = 256 + 1 * (16 + 80 + 8 * 5 + 80); // samples-per-record field of signal 0
   assert.throws(() => parseEDF(patch(sprOff, 8, '0')), /samples per record/);
 });
+
+test('odd header size uses the DataView fallback and decodes the same samples', () => {
+  const a = Float32Array.from({ length: 300 }, (_, i) => 200 * Math.sin(i / 7));
+  const good = new Uint8Array(makeEdf([{ label: 'A', fs: 100, data: a }], 3));
+  const hb = 512, odd = new Uint8Array(good.length + 1);
+  odd.set(good.subarray(0, hb)); odd.set(good.subarray(hb), hb + 1);
+  odd.set(Array.from(String(hb + 1).padEnd(8)).map((c) => c.charCodeAt(0)), 184);
+  assert.deepEqual(parseEDF(odd.buffer).signals[0], parseEDF(good.buffer).signals[0]);
+});
