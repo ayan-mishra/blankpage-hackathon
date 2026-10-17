@@ -184,6 +184,30 @@ test('an analysis saved in one browser can be reopened from the account in anoth
   await other.close();
 });
 
+test('the sidebar stays pinned while the report scrolls past', async ({ page }) => {
+  await page.goto('/app.html?demo');
+  await saveBtn(page).click();
+  await expect(rows(page)).toHaveCount(1);
+  await expect(page.locator('#history')).toHaveCSS('position', 'sticky');
+
+  await page.evaluate(() => window.scrollTo(0, 1500));
+  await page.waitForTimeout(150);
+
+  // The report has scrolled away, but the sidebar is still pinned near the top.
+  const mapTop = await page.locator('#mapwrap').evaluate(el => el.getBoundingClientRect().top);
+  expect(mapTop).toBeLessThan(0);
+  const top = await page.locator('#history').evaluate(el => el.getBoundingClientRect().top);
+  expect(top).toBeGreaterThanOrEqual(0);
+  expect(top).toBeLessThanOrEqual(24);
+  await expect(saveBtn(page)).toBeInViewport();
+  await expect(rows(page)).toBeInViewport();
+  await page.screenshot({ path: 'test-results/sidebar-pinned.png' });
+
+  // One column on a phone: pinning would cover the report, so it must not stick.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator('#history')).toHaveCSS('position', 'static');
+});
+
 test('sidebar follows the app theme and fits a phone without overflow', async ({ page }) => {
   await page.goto('/app.html?demo');
   await saveBtn(page).click();
