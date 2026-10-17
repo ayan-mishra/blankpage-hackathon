@@ -6,11 +6,12 @@ import { windowMetrics } from './metrics.js';
 import { METRICS, DEFAULT_CHECKLIST, evaluate, verdict, fmt, parseRule, proposeRule } from './rules.js';
 import { makeDemo } from './demo.js';
 import { mapLayout, GUT, TOP, ROW, MAP_W } from './map.js';
+import { mountHistory } from './history.js';
 
 const WIN = 5; // seconds per window
 const $ = (id) => document.getElementById(id);
 const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
-const S = { edf: null, by: [], checklist: readSaved() ?? [...DEFAULT_CHECKLIST], flags: [], preview: new Set(), sel: null, cell: null, rule: null, step: 1, cols: 0, last: null, change: null, starter: false };
+const S = { edf: null, name: '', by: [], checklist: readSaved() ?? [...DEFAULT_CHECKLIST], flags: [], preview: new Set(), sel: null, cell: null, rule: null, step: 1, cols: 0, last: null, change: null, starter: false };
 
 // The demo starts from a 50 Hz lab's checklist (no 60 Hz rule) so the visitor can teach the
 // missing rule from C4's hum and watch the verdict change. Real files get the saved or full default.
@@ -38,8 +39,22 @@ function repWin(ch, col) {
   return flagged ? flagged.win : w0;
 }
 
+// Metadata for the history sidebar. Only these fields are stored, never the recording.
+const RECORDING_NAME = 200;
+const cleanName = (name) => {
+  const trimmed = typeof name === 'string' ? name.trim() : '';
+  return trimmed ? [...trimmed].slice(0, RECORDING_NAME).join('') : 'untitled.edf';
+};
+const recordingMeta = () => (S.edf ? {
+  filename: cleanName(S.name),
+  durationSec: S.edf.duration,
+  channels: S.edf.labels.length,
+  sampleRate: S.edf.rates[0],
+} : null);
+
 function load(edf, { demo = false, name = '' } = {}) {
   S.edf = edf;
+  S.name = cleanName(demo ? 'demo-recording.edf' : name);
   S.by = edf.signals.map((x, i) => windowMetrics(x, edf.rates[i], WIN));
   const n = Math.min(...S.by.map((w) => w.length));
   S.by = S.by.map((w) => w.slice(0, n));
@@ -55,6 +70,7 @@ function load(edf, { demo = false, name = '' } = {}) {
   $('load').classList.add('loaded');
   $('report').hidden = false;
   refresh();
+  history.refresh();
 }
 
 // Every checklist edit goes through here so the verdict card can say what the edit did.
@@ -300,6 +316,8 @@ $('drop').ondragover = (e) => { e.preventDefault(); $('drop').classList.add('ove
 $('drop').ondragleave = () => $('drop').classList.remove('over');
 $('drop').ondrop = (e) => { e.preventDefault(); $('drop').classList.remove('over'); e.dataTransfer.files[0] && openFile(e.dataTransfer.files[0]); };
 $('demo').onclick = () => { load(makeDemo(), { demo: true }); $('report').scrollIntoView({ block: 'start' }); };
+// Mount the history sidebar before the demo auto-load so load() can refresh it.
+const history = mountHistory(supabase, { getRecording: recordingMeta });
 if (new URLSearchParams(location.search).has('demo')) load(makeDemo(), { demo: true });
 
 mountAccount(supabase, {

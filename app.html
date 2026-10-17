@@ -15,6 +15,17 @@
   <nav class="tabs"><a href="app.html" aria-current="page">Check one recording</a><a href="study.html">Check a study</a></nav>
   <p class="tag">Check an EEG recording you’ve collected. No experience needed: every result comes with a plain-English reason.</p>
 </header>
+<div class="shell">
+  <aside id="history" class="card" aria-labelledby="historyHeading">
+    <div class="row-head"><h2 id="historyHeading">Previous analyses</h2></div>
+    <div class="row history-actions">
+      <button id="saveAnalysis" type="button" disabled>Save analysis</button>
+      <button id="syncAnalyses" type="button" class="ghost" disabled title="Sync with your account">Sync</button>
+    </div>
+    <p class="hint" id="historyStatus" aria-live="polite">No analyses saved yet.</p>
+    <p class="hint" id="historyEmpty">Load a recording, then save it here to build your history.</p>
+    <ul id="historyList" hidden></ul>
+  </aside>
 <main>
   <section id="load" class="card">
     <label class="drop" id="drop">
@@ -118,6 +129,7 @@
     </dl>
   </details>
 </main>
+</div>
 <script type="module" src="src/app.js"></script>
 </body>
 </html>

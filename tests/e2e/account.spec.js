@@ -6,7 +6,7 @@ const token = () => {
 };
 const session = () => ({ access_token: token(), refresh_token: 'test-refresh', token_type:'bearer', expires_in:3600, user });
 async function mockBackend(page) {
-  let rows = [];
+  let rows = [], analyses = [];
   await page.route('https://somnium-test.supabase.co/**', async route => {
     const request = route.request(), url = new URL(request.url());
     let body = {}, status = 200;
@@ -15,6 +15,11 @@ async function mockBackend(page) {
       else body = session();
     } else if (url.pathname.endsWith('/signup')) body = { ...user, identities: [] };
     else if (url.pathname.endsWith('/user')) body = user;
+    else if (url.pathname.includes('/rest/v1/analyses')) {
+      if (request.method() === 'POST') { analyses.push(request.postDataJSON()); body = null; status = 201; }
+      else if (request.method() === 'DELETE') { body = [{ id: 'gone' }]; analyses = []; }
+      else body = analyses;
+    }
     else if (url.pathname.includes('/rest/v1/checklists')) {
       if (request.method() === 'POST') { rows.push({ ...request.postDataJSON(), id:'saved-1', created_at: new Date().toISOString() }); body = null; status = 201; }
       else if (request.method() === 'DELETE') { body = [{id:'saved-1'}]; rows = []; }
