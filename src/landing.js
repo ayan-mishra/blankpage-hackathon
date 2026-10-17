@@ -1,14 +1,23 @@
 import { makeDemo } from './demo.js';
 import { windowMetrics } from './metrics.js';
-import './gpu.js';
 import { stripChart } from './strip.js';
-import { DEFAULT_CHECKLIST, evaluate, verdict, explain } from './rules.js';
+import { DEFAULT_CHECKLIST, evaluate, verdict, explain, proposeRule } from './rules.js';
 
 // The landing page is drawn from the real demo recording and the real rule engine.
-const WIN = 5, X0 = 90, W = 890, Y0 = 30, ROW = 90, BUCKETS = 360;
+// No hardware-acceleration gate here (study.js has one): a modal must not be the first thing a visitor sees.
+const WIN = 5, Y0 = 30, ROW = 90, VH = 600, BUCKETS = 360;
+// Phones get a narrower drawing space (same height), so the chart is taller on screen and labels stay readable.
+const narrowQ = matchMedia('(max-width: 600px)');
+let VW, X0, W;
+const setGeometry = () => { VW = narrowQ.matches ? 520 : 1000; X0 = narrowQ.matches ? 62 : 90; W = VW - X0 - (narrowQ.matches ? 14 : 20); };
+setGeometry();
 const edf = makeDemo();
 const by = edf.signals.map((x, i) => windowMetrics(x, edf.rates[i], WIN));
-const flags = evaluate(DEFAULT_CHECKLIST, by);
+// Same story as the app's demo: it starts without a 60 Hz rule (a lab on 50 Hz power), and the visitor adds one in step 4.
+const START = DEFAULT_CHECKLIST.filter((r) => r.metric !== 'line60');
+const TYPED = { id: 'typed', name: '60 Hz hum', metric: 'line60', op: '>', value: 0.15 };
+const flags = evaluate(START, by);
+const added = evaluate([TYPED], by);
 const nWin = by[0].length;
 const xOf = (win) => X0 + (win / nWin) * W;
 const NS = 'http://www.w3.org/2000/svg';
@@ -21,20 +30,20 @@ const el = (tag, attrs, text) => {
 const clamp = (v, m) => Math.max(-m, Math.min(m, v));
 
 // merge consecutive flagged windows per channel and rule into marks
-const names = { flat: 'flatline', line50: '50 Hz hum', line60: '60 Hz hum', ptp: 'huge swings', kurtosis: 'spikes' };
+const names = { flat: 'flatline', quiet: 'too faint', line50: '50 Hz hum', line60: '60 Hz hum', ptp: 'huge swings', kurtosis: 'spikes' };
 const runs = [];
 const grouped = new Map();
-flags.forEach((f) => { const k = `${f.ch}:${f.rule.metric}`; (grouped.get(k) || grouped.set(k, []).get(k)).push(f.win); });
+[...flags, ...added].forEach((f) => { const k = `${f.ch}:${f.rule.metric}`; (grouped.get(k) || grouped.set(k, []).get(k)).push(f.win); });
 grouped.forEach((wins, k) => {
   const [ch, metric] = k.split(':'); wins.sort((a, b) => a - b);
   let s = wins[0], p = wins[0];
-  const push = () => runs.push({ ch: +ch, metric, s, e: p });
+  const push = () => runs.push({ ch: +ch, metric, s, e: p, added: metric === TYPED.metric });
   for (const w of wins.slice(1)) { if (w - p > 1) { push(); s = w; } p = w; }
   push();
 });
 
-// precompute trace paths once; every figure reuses them
-const paths = edf.signals.map((sig, ch) => {
+// trace paths depend only on the geometry; every figure reuses them
+const tracePaths = () => edf.signals.map((sig, ch) => {
   const cy = Y0 + ch * ROW + ROW / 2, per = Math.floor(sig.length / BUCKETS);
   let d = '';
   for (let b = 0; b < BUCKETS; b++) {
@@ -46,29 +55,58 @@ const paths = edf.signals.map((sig, ch) => {
   return d;
 });
 
-function build(svg) {
+function build(svg, paths) {
+  svg.replaceChildren();
+  svg.setAttribute('viewBox', `0 0 ${VW} ${VH}`);
+  svg.style.setProperty('--scan', `${W - 4}px`);
   edf.labels.forEach((label, ch) => {
     const cy = Y0 + ch * ROW + ROW / 2;
     svg.append(el('text', { class: 'lab', x: 14, y: cy + 5 }, label));
     const trace = el('path', { class: 'trace', d: paths[ch] });
     svg.append(trace);
-    const q = el('text', { class: 'q', x: 970, y: cy + 11, 'text-anchor': 'middle' }, '?');
+    const q = el('text', { class: 'q', x: VW - 30, y: cy + 11, 'text-anchor': 'middle' }, '?');
     q.style.setProperty('--r', ch);
     svg.append(q);
   });
-  runs.forEach((r) => {
-    const y = Y0 + r.ch * ROW;
-    const band = el('rect', { class: 'band', x: xOf(r.s), y: y + 4, width: xOf(r.e + 1) - xOf(r.s), height: ROW - 8, rx: 3 });
-    const tag = el('text', { class: 'btag', x: xOf(r.s) + 6, y: y + 18 }, names[r.metric]);
-    const d = `${(((xOf(r.s) - X0) / W) * 2.4 + 0.5).toFixed(2)}s`; // lights up as the scan line passes
-    band.style.setProperty('--d', d); tag.style.setProperty('--d', d);
+  // One tag per stretch: when marks on a channel overlap (a flatline also trips "spikes"), the longer mark keeps the label.
+  const charW = narrowQ.matches ? 12 : 9.6, placed = [];
+  [...runs].sort((a, b) => (b.e - b.s) - (a.e - a.s)).forEach((r) => {
+    const y = Y0 + r.ch * ROW, x0 = xOf(r.s), x1 = x0 + 12 + names[r.metric].length * charW;
+    const band = el('rect', { class: 'band', x: x0, y: y + 4, width: xOf(r.e + 1) - x0, height: ROW - 8, rx: 3 });
+    const d = `${(((x0 - X0) / W) * 2.4 + 0.5).toFixed(2)}s`; // lights up as the scan line passes
+    band.style.setProperty('--d', d);
+    if (r.added) band.classList.add('added');
     if (r.metric === 'flat' && r.ch === 2) band.classList.add('focus');
-    svg.append(band, tag);
+    svg.prepend(band);
+    if (placed.some((p) => p.ch === r.ch && x0 < p.x1 && p.x0 < x1)) return;
+    placed.push({ ch: r.ch, x0, x1 });
+    const tag = el('text', { class: 'btag', x: x0 + 6, y: y + (narrowQ.matches ? 24 : 18) }, names[r.metric]);
+    tag.style.setProperty('--d', d);
+    if (r.added) tag.classList.add('added');
+    svg.append(tag);
   });
   svg.append(el('rect', { class: 'scan', x: X0, y: Y0 - 6, width: 3, height: ROW * 6 + 12 }));
-  svg.append(el('rect', { class: 'pick', x: xOf(40), y: Y0 + 4 * ROW + 2, width: xOf(47) - xOf(40), height: ROW - 4, rx: 3 }));
+  svg.append(el('rect', { class: 'pick', x: xOf(PICK.s), y: Y0 + PICK.ch * ROW + 2, width: xOf(PICK.e + 1) - xOf(PICK.s), height: ROW - 4, rx: 3 }));
 }
-document.querySelectorAll('.chart').forEach(build);
+// The "Show it" drag: O1 3:20-3:55. The suggestion text is whatever the real proposeRule returns for that drag.
+const PICK = { ch: 4, s: 40, e: 46 };
+const drawAll = () => {
+  const paths = tracePaths();
+  document.querySelectorAll('.chart').forEach((svg) => build(svg, paths));
+  document.querySelectorAll('.trace').forEach((t) => t.style.setProperty('--len', t.getTotalLength()));
+};
+drawAll();
+narrowQ.addEventListener('change', () => { setGeometry(); drawAll(); });
+
+const cells = [];
+for (let win = PICK.s; win <= PICK.e; win++) cells.push({ ch: PICK.ch, win });
+const learned = proposeRule(by, cells);
+const shortName = { flat: 'flatline', quiet: 'too faint', ptp: 'big swings', kurtosis: 'spikiness', line50: '50 Hz hum', line60: '60 Hz hum' };
+const showIt = document.getElementById('showIt');
+if (learned) {
+  const num = learned.metric === 'ptp' ? `${Math.round(learned.value)} µV` : learned.metric === 'kurtosis' ? Math.round(learned.value) : `${Math.round(learned.value * 100)}%`;
+  showIt.lastElementChild.textContent = `${shortName[learned.metric]} above about ${num}`;
+}
 
 // callout text comes from the real explain() for the C3 flatline
 const focusRun = runs.find((r) => r.metric === 'flat' && r.ch === 2);
@@ -79,11 +117,11 @@ const calloutHead = h0 + ': ', calloutRest = r0.join(': ');
 callout.replaceChildren(Object.assign(document.createElement('b'), { textContent: calloutHead }), document.createTextNode(calloutRest));
 callout.style.top = `${((Y0 + 4 * ROW + 4) / 600) * 100}%`;
 
-const v = verdict(flags, by);
+const v = verdict([...flags, ...added], by);
 const st = document.getElementById('stamp');
 st.querySelector('strong').textContent = `Recording is ${v.label}`;
 const pct = st.querySelector('span');
-const pctText = () => `${(v.bad * 100).toFixed(0)}% of channel-windows flagged by ${DEFAULT_CHECKLIST.length} rules`;
+const pctText = () => `${(v.bad * 100).toFixed(0)}% of channel-windows flagged by ${START.length + 1} rules`;
 pct.textContent = pctText();
 
 // ---- scroll story
@@ -106,14 +144,13 @@ const enter = {
     const t0 = performance.now() + 800;
     const tick = (now) => {
       const k = Math.max(0, Math.min(1, (now - t0) / 900));
-      pct.textContent = `${(v.bad * 100 * k).toFixed(0)}% of channel-windows flagged by ${DEFAULT_CHECKLIST.length} rules`;
+      pct.textContent = `${(v.bad * 100 * k).toFixed(0)}% of channel-windows flagged by ${START.length + 1} rules`;
       if (k < 1) requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
     setTimeout(() => (pct.textContent = pctText()), 2000); // final number even if frames are throttled
   },
 };
-document.querySelectorAll('.trace').forEach((t) => t.style.setProperty('--len', t.getTotalLength()));
 
 // text reveals as the step enters; each figure starts its own animation when it is on screen
 const once = (nodes, opts, fn) => {

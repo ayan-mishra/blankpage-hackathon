@@ -84,3 +84,20 @@ export function toCsv(rows) {
 
 // A ready-to-send note for the participant, in second person.
 export const message = (r) => `Hi, thanks for taking part. Last night’s headband recording had a problem: ${r.simple} ${r.ask} If you get stuck, reply and we’ll help.`;
+
+export const needsFollowUp = (r) => Boolean(r.error) || r.status !== 'ok';
+const RANK = { bad: 0, check: 1, ok: 2 };
+const rankOf = (r) => (r.error ? -1 : RANK[r.status]);
+
+// One line per participant across all their nights, worst first, so the coordinator sees who to contact.
+export function byParticipant(rows) {
+  const map = new Map();
+  for (const r of rows) {
+    const p = map.get(r.participant) || { participant: r.participant, nights: 0, flagged: 0, worst: r };
+    p.nights++;
+    if (needsFollowUp(r)) p.flagged++;
+    if (rankOf(r) < rankOf(p.worst)) p.worst = r;
+    map.set(r.participant, p);
+  }
+  return [...map.values()].sort((a, b) => rankOf(a.worst) - rankOf(b.worst) || a.participant.localeCompare(b.participant, undefined, { numeric: true }));
+}

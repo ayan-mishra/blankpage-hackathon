@@ -18,51 +18,67 @@
 <main>
   <section id="load" class="card">
     <label class="drop" id="drop">
-      <input type="file" id="file" accept=".edf,.EDF" hidden>
+      <input type="file" id="file" accept=".edf,.EDF" class="sr-only">
       <strong>Drop an EDF recording</strong> or click to choose
       <span>EEG recordings stay in your browser. Only checklists you save go to your account.</span>
     </label>
-    <button id="demo" class="ghost">Try the demo recording</button>
+    <div class="row load-row"><button id="demo" class="ghost">Try the demo recording</button><span id="loaded" class="hint" hidden></span></div>
     <p id="error" role="alert"></p>
   </section>
 
   <section id="report" hidden>
-    <div id="verdict" class="card"></div>
+    <div id="verdict" class="card" aria-live="polite">
+      <p class="eyebrow">Verdict</p>
+      <p class="verdict-line">This recording is <span id="verdictPill" class="pill"></span></p>
+      <p id="verdictWhy" class="hint"></p>
+      <p id="change" hidden></p>
+    </div>
 
     <div class="card">
-      <div class="row-head"><h2>Recording map</h2><span class="hint">Click a square to see why it was flagged.</span></div>
-      <div id="mapwrap"><canvas id="map"></canvas></div>
-      <div class="legend"><i class="ok"></i>clean <i class="bad"></i>flagged <i class="pre"></i>would be flagged by the rule you’re previewing</div>
+      <div class="row-head map-head">
+        <div><h2>Recording map</h2><p class="hint" id="teachHint">Click a square to see why. Drag across several squares to teach a rule.</p></div>
+        <button id="teach" disabled>Teach a rule from selection</button>
+      </div>
+      <div id="mapwrap"><canvas id="map" tabindex="0" role="application" aria-label="Recording map: one row per channel, one square per 5 seconds. Arrow keys move between squares; Shift and arrows select a region." aria-describedby="evidence"></canvas></div>
+      <div class="legend"><span><i class="ok"></i>clean</span><span><i class="bad"></i>flagged</span><span><i class="pre"></i>would be flagged by the rule you’re previewing</span></div>
     </div>
 
     <div class="grid">
       <div class="card">
         <h2>Evidence</h2>
-        <div id="evidence"><p class="hint">Select a cell on the map.</p></div>
-        <canvas id="trace" height="120"></canvas>
+        <div id="evidence" aria-live="polite"></div>
+        <canvas id="trace" height="120" role="img" aria-label="Raw signal for the selected square"></canvas>
       </div>
 
-      <details class="card" id="ruleBox">
-        <summary>Add your own rule (optional)</summary>
-        <div class="row"><input id="ruleText" placeholder="e.g. flag 60 Hz hum above 15%" aria-label="Describe a rule"><button id="ruleGo">Preview</button></div>
-        <div class="row"><button id="teach" class="ghost" disabled>Teach from selection</button><span class="hint" id="teachHint">Drag across the map first.</span></div>
-        <div id="proposal" hidden>
-          <div class="row">
-            <select id="pMetric"></select>
-            <select id="pOp"><option>&gt;</option><option>&lt;</option></select>
-            <input id="pValue" type="number" step="any">
-          </div>
-          <p id="pCount" class="hint"></p>
-          <div class="row"><button id="pAdd">Add to checklist</button><button id="pCancel" class="ghost">Cancel</button></div>
+      <section class="card" id="ruleBox" aria-labelledby="rulesHeading">
+        <div class="row-head"><h2 id="rulesHeading">Your rules</h2>
+          <span class="row-tools"><button id="export" class="ghost small">Export</button><label class="ghost btn small">Import<input type="file" id="import" accept=".json" class="sr-only"></label></span></div>
+        <p class="hint">The verdict comes from these rules. Change them and it updates.</p>
+        <div id="tryIt" class="tryit" hidden>
+          <p><strong>Try it.</strong> This demo starts with a checklist from a lab on 50 Hz power, but it was recorded on 60 Hz power. One channel has hum the checklist misses.</p>
+          <ol>
+            <li id="step1">Click <b>C4</b> after 2:30 on the map. It’s marked clean, but look at the trace.</li>
+            <li id="step2">Drag across C4 from 2:30 to the end, then press <b>Teach a rule from selection</b>.</li>
+            <li id="step3">Check the preview, then press <b>Add rule</b>. Watch the verdict.</li>
+          </ol>
+          <p id="tryDone" hidden><strong>That’s it.</strong> You taught Somnium something its starter checklist didn’t know, and the verdict changed.</p>
         </div>
-        <p id="ruleError" class="hint"></p>
-      </details>
-    </div>
-
-    <div class="card">
-      <div class="row-head"><h2>Checks being applied</h2>
-        <span><button id="export" class="ghost">Export</button> <label class="ghost btn">Import<input type="file" id="import" accept=".json" hidden></label></span></div>
-      <ul id="checklist"></ul>
+        <form id="ruleForm" class="row"><input id="ruleText" placeholder="e.g. flag 60 Hz hum above 15%" aria-label="Describe a rule in words" autocomplete="off"><button id="ruleGo">Preview</button></form>
+        <p id="ruleError" class="hint" role="status"></p>
+        <div id="proposal" class="proposal" hidden>
+          <p class="eyebrow">Preview</p>
+          <div class="row">
+            <select id="pMetric" aria-label="What to measure"></select>
+            <select id="pOp" aria-label="Direction"><option value="&gt;">above</option><option value="&lt;">below</option></select>
+            <span class="value"><input id="pValue" type="number" step="any" aria-label="Threshold"><span id="pUnit"></span></span>
+          </div>
+          <p id="pCount"></p>
+          <div class="row"><button id="pAdd">Add rule</button><button id="pCancel" class="ghost">Cancel</button></div>
+        </div>
+        <h3>Applied now</h3>
+        <ul id="checklist"></ul>
+        <p class="hint"><a href="study.html">Apply these rules to a study →</a></p>
+      </section>
     </div>
   </section>
   <section id="account" class="card" aria-labelledby="accountHeading">

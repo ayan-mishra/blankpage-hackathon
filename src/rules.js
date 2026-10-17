@@ -3,6 +3,10 @@ export const METRICS = {
   flat: { label: 'Signal stopped (flat line)', pct: true, cause: 'contact', why: 'The headband probably lost contact with the skin',
     fix: 'Ask them to clean their forehead and put the headband back on snugly before bed',
     simple: 'The sensor stopped touching the skin, so it recorded nothing.' },
+  // low: the bad direction is below the value (rules and learned rules use '<')
+  quiet: { label: 'Signal too faint (µV)', low: true, cause: 'contact', why: 'The headband probably isn’t touching the skin',
+    fix: 'Ask them to clean their forehead and put the headband back on snugly before bed',
+    simple: 'The sensor wasn’t touching the skin, so it picked up almost nothing.' },
   ptp: { label: 'Big swings in the signal (µV)', cause: 'loose', why: 'Usually movement, or a loose headband',
     fix: 'Check the strap is snug and not shifting on the pillow',
     simple: 'The headband was moving around, so the signal went wild.' },
@@ -20,6 +24,8 @@ const OPS = { '>': (a, b) => a > b, '<': (a, b) => a < b };
 
 export const DEFAULT_CHECKLIST = [
   { id: 'flat', name: 'Flatline', metric: 'flat', op: '>', value: 0.5 },
+  // Std of a seated electrode never got below ~9 µV in the demo and study; an unseated one reads ~1 µV (Parry & Briganti 2026).
+  { id: 'quiet', name: 'Too faint', metric: 'quiet', op: '<', value: 2 },
   { id: 'line50', name: '50 Hz hum', metric: 'line50', op: '>', value: 0.2 },
   { id: 'line60', name: '60 Hz hum', metric: 'line60', op: '>', value: 0.2 },
   { id: 'ptp', name: 'Huge swings', metric: 'ptp', op: '>', value: 300 },
@@ -60,8 +66,11 @@ export function parseRule(text) {
   const t = text.toLowerCase();
   const num = t.match(/(\d+(?:\.\d+)?)\s*(%)?/g)?.map((x) => ({ n: parseFloat(x), pct: x.includes('%') }));
   const hz = t.match(/\b(50|60)\s*hz/)?.[1];
+  const op = /below|under|less|<|fewer/.test(t) ? '<' : /above|over|more|>|bigger|greater/.test(t) ? '>' : null;
   let metric;
   if (/flat/.test(t)) metric = 'flat';
+  // a low µV limit means a faint signal, not swings: ptp maps to 'loose' and would give the wrong advice
+  else if (/faint|quiet|weak|dead|\bstd\b/.test(t) || (op === '<' && /µv|uv/.test(t) && !/swing|peak|ptp|amplitude/.test(t))) metric = 'quiet';
   else if (hz || /line|mains|hum/.test(t)) metric = hz === '50' ? 'line50' : 'line60';
   else if (/spik|kurt|pop/.test(t)) metric = 'kurtosis';
   else if (/amplitude|swing|peak|ptp|µv|uv/.test(t)) metric = 'ptp';
@@ -70,28 +79,30 @@ export function parseRule(text) {
   if (!cands.length) return null;
   const c = cands[cands.length - 1];
   const value = METRICS[metric].pct ? (c.pct || c.n > 1 ? c.n / 100 : c.n) : c.n;
-  const op = /below|under|less|<|fewer/.test(t) ? '<' : '>';
-  return { id: `r${Date.now()}`, name: text.trim().slice(0, 40), metric, op, value };
+  return { id: `r${Date.now()}`, name: text.trim().slice(0, 40), metric, op: op ?? (METRICS[metric].low ? '<' : '>'), value };
 }
 
-const quantile = (a, q) => {
-  const s = [...a].sort((x, y) => x - y);
-  return s[Math.min(s.length - 1, Math.floor(q * s.length))];
-};
+// s must be sorted ascending.
+const quantile = (s, q) => s[Math.min(s.length - 1, Math.floor(q * s.length))];
 
 // "Show it": the user marks windows as bad; pick the metric that best separates them from the rest.
 // selection: [{ch, win}]. Returns a proposed rule (user previews and edits it) or null.
 export function proposeRule(byChannel, selection) {
   const sel = new Set(selection.map((s) => `${s.ch}:${s.win}`));
+  // Split windows once, not once per metric.
+  const inW = [], outW = [];
+  byChannel.forEach((wins, ch) => wins.forEach((w, win) => (sel.has(`${ch}:${win}`) ? inW : outW).push(w)));
   let best = null;
   for (const metric of Object.keys(METRICS)) {
-    const inside = [], outside = [];
-    byChannel.forEach((wins, ch) => wins.forEach((w, win) => (sel.has(`${ch}:${win}`) ? inside : outside).push(w[metric])));
+    const d = METRICS[metric].low ? -1 : 1; // flip low-is-bad metrics so "selected sits above the rest" still applies
+    const inside = inW.map((w) => d * w[metric]), outside = outW.map((w) => d * w[metric]);
     if (!inside.length || !outside.length) continue;
-    const hi = quantile(outside, 0.95), lo = quantile(inside, 0.25);
-    if (lo <= hi) continue; // not separable on this metric
-    const score = (lo - hi) / (quantile(outside, 0.99) - quantile(outside, 0.5) + 1e-9);
-    if (!best || score > best.score) best = { metric, value: (hi + lo) / 2, score };
+    // Sort once per metric; typed-array sort is numeric and far faster than a comparator sort.
+    const ins = Float64Array.from(inside).sort(), out = Float64Array.from(outside).sort();
+    const hi = quantile(out, 0.95), lo = quantile(ins, 0.25);
+    if (!(lo > hi)) continue; // not separable on this metric (or a window lacks it)
+    const score = (lo - hi) / (quantile(out, 0.99) - quantile(out, 0.5) + 1e-9);
+    if (!best || score > best.score) best = { metric, value: (d * (hi + lo)) / 2, score, op: d < 0 ? '<' : '>' };
   }
-  return best && { id: `r${Date.now()}`, name: `Learned: ${METRICS[best.metric].label}`, metric: best.metric, op: '>', value: best.value };
+  return best && { id: `r${Date.now()}`, name: `Learned: ${METRICS[best.metric].label}`, metric: best.metric, op: best.op, value: best.value };
 }

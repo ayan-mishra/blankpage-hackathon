@@ -12,7 +12,7 @@ Rules save as a checklist you can share. Recordings are parsed and checked in th
 
 ## Who it's for
 
-Study coordinators. In an insomnia study with home sleep headbands, `study.html` takes one EDF per participant-night and shows who is wearing the headband properly, what went wrong in plain words, and what to tell them. The table exports as CSV.
+Study coordinators. In an insomnia study with home sleep headbands, `study.html` takes one EDF per participant-night and shows who is wearing the headband properly, what went wrong in plain words, and what to tell them. It grades with the rules you wrote in `app.html`, or a checklist file you import. The table exports as CSV.
 
 Hobby and first-time researchers. `app.html` checks a single recording, explains each result in everyday language, and has a glossary instead of jargon.
 
@@ -27,8 +27,9 @@ npm run test:e2e           # first run: npx playwright install chromium
 npm run build             # deploy dist/ to a static host
 ```
 
-Node 22.12+ (Node 24 recommended). Click "Try the demo recording" for a synthetic
-file with three known faults. The app defaults to the Somnium Supabase project below.
+Node 22.12+ (Node 24 recommended). Click "Try the demo recording" (or open `app.html?demo`)
+for a synthetic file with three known faults; the "Try it" box walks you through
+teaching it a 60 Hz rule. `study.html?sample` opens the sample study. The app defaults to the Somnium Supabase project below.
 To use another project, override the two public values in `.env.local`. Set both to
 empty strings to disable accounts; the demo and local checklist tools still work.
 
@@ -107,9 +108,11 @@ removes this schema **and all saved checklists**; export/back up data before doi
 | `src/study.js` | the study page (many files, one table) |
 | `src/map.js` | map geometry: windows to grid columns, and the canvas pixel budget |
 | `src/app.js` | the single-recording page |
+| `src/checklists.js` | checklist validation, and the working checklist shared by both pages in this browser |
+| `src/demo.js` | seeded synthetic EEG for the demo and the sample study, with planted faults |
 | `src/gpu.js` | detects software rendering and shows how to turn hardware acceleration on |
 
-Rules are plain data over five documented metrics, never generated code, so you can inspect every flag.
+Rules are plain data over documented metrics, never generated code, so you can inspect every flag. `src/checklists.js` keeps the working checklist in the browser, so a rule you add in `app.html` also grades nights in `study.html`, including a tab that's already open.
 
 ## Limits (MVP)
 
@@ -122,6 +125,18 @@ Rules are plain data over five documented metrics, never generated code, so you 
 
 ## Roadmap
 
-A shared checklist library, BDF and FIF support, neighbor-channel correlation, LLM rule translation, and methods-section text generated from a checklist.
+Next 2 weeks:
+
+- Move EDF parsing and measuring into a Web Worker, so a folder of full nights doesn't freeze the page.
+- First validation pass: compare Somnium's flags with PyPREP noisy channels and YASA artifact rejection on a public sleep dataset, and publish the agreement.
+- 30-second windows for sleep data, and tuning the "signal too faint" threshold on real headband nights.
+- Zoom from a grouped map column down to single windows.
+- A two-minute check before lights-off, since most outright failures in the cited preprint were bad from the start.
+
+Next 3 months: opt-in share links for saved checklists and a starter library per headband; LLM rule translation that outputs the same `{metric, op, value}` rules and still requires a preview; BDF, EDF+ annotations and neighbor-channel correlation; a pilot with two or three home sleep studies, measuring QC time and re-recorded nights.
+
+Next 6 months: a validation write-up against expert-labelled data, methods-section text generated from a checklist, multi-night trends per participant, and an audit trail of which checklist version graded which file. It stays research-use only.
+
+Pitch and submission materials are in `docs/pitch/`.
 
 `src/edf.js` and `src/metrics.js` were first drafted by a free DeepSeek worker through OpenSlave, then reviewed and fixed here.

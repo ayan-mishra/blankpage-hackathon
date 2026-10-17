@@ -69,3 +69,28 @@ test('participant message is plain and actionable', async () => {
   const m = message(r);
   assert.match(m, /stopped touching the skin/); assert.match(m, /Please clean your forehead/); assert.doesNotMatch(m, /Ask them/);
 });
+
+test('participants roll up across nights, worst first', async () => {
+  const { byParticipant, needsFollowUp } = await import('../src/wear.js');
+  const rows = [
+    { participant: 'P2', status: 'ok' },
+    { participant: 'P10', status: 'ok' }, { participant: 'P10', status: 'check' }, { participant: 'P10', status: 'ok' },
+    { participant: 'P1', status: 'bad' },
+    { participant: 'P3', error: 'nope' },
+    { participant: 'P4', status: 'ok' },
+  ];
+  const r = byParticipant(rows);
+  assert.deepEqual(r.map((p) => p.participant), ['P3', 'P1', 'P10', 'P2', 'P4']);
+  const p10 = r.find((p) => p.participant === 'P10');
+  assert.equal(p10.nights, 3); assert.equal(p10.flagged, 1); assert.equal(p10.worst.status, 'check');
+  assert.equal(needsFollowUp({ status: 'ok' }), false); assert.equal(needsFollowUp({ error: 'x' }), true);
+});
+
+test('grading uses the checklist it is given, not the default', () => {
+  const swings = night(60, (i) => i >= 20, () => ({ ...clean(), ptp: 200 })); // under the default 300 µV
+  assert.equal(analyzeNight(swings, 10, DEFAULT_CHECKLIST).status, 'ok');
+  const strict = [...DEFAULT_CHECKLIST, { id: 'r1', name: 'Swings over 150', metric: 'ptp', op: '>', value: 150 }];
+  const r = analyzeNight(swings, 10, strict);
+  assert.equal(r.status, 'bad'); assert.equal(r.cause, 'loose');
+  assert.equal(analyzeNight(night(60, (i) => i >= 20), 10, []).status, 'ok'); // no rules, nothing flagged
+});
