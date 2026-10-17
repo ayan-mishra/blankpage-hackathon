@@ -132,34 +132,3 @@ test('account forms fit desktop and mobile screens', async ({page}) => {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({path:'test-results/account-mobile.png',fullPage:true});
 });
-
-test('demo: teach a rule from a map selection and see it change the verdict', async ({page}) => {
-  for (const size of [{width:1280,height:900},{width:375,height:812}]) {
-    await page.setViewportSize(size);
-    await page.goto('/app.html');
-    await page.getByRole('button',{name:'Try the demo recording'}).click();
-    await expect(page.locator('#verdictPill')).toHaveText('usable');
-    const map = page.locator('#map'), box = await map.boundingBox();
-    const { cw, cols } = await map.evaluate(c => ({ cw: c._cw, cols: Math.round((c._w - 44) / c._cw) }));
-    // C4 is row 3; its 60 Hz hum runs from 2:30 (half way) to the end of the 5-minute demo.
-    const y = box.y + 20 + 3 * 30 + 15, x = col => box.x + 44 + col * cw + cw / 2;
-    await page.mouse.move(x(cols / 2), y); await page.mouse.down();
-    await page.mouse.move(x(cols - 1), y, {steps: 8}); await page.mouse.up();
-    await page.getByRole('button',{name:'Teach a rule from selection'}).click();
-    await expect(page.locator('#pMetric')).toHaveValue('line60');
-    await expect(page.locator('#pCount')).toContainText('changes the verdict');
-    await page.getByRole('button',{name:'Add rule'}).click();
-    await expect(page.locator('#verdictPill')).toHaveText('usable after fixes');
-    await expect(page.locator('#change')).toContainText('changed the verdict');
-    await expect(page.locator('#tryDone')).toBeVisible();
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  }
-});
-test('map is keyboard operable', async ({page}) => {
-  await page.goto('/app.html?demo');
-  await page.locator('#map').focus();
-  await page.keyboard.press('ArrowRight');
-  await expect(page.locator('#evidence h3')).toContainText('F3');
-  await page.keyboard.press('Shift+ArrowDown');
-  await expect(page.getByRole('button',{name:'Teach a rule from selection'})).toBeEnabled();
-});

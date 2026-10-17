@@ -52,27 +52,21 @@ export function parseEDF(arrayBuffer) {
     const pmin = Number(at(i, 3));
     const dmin = Number(at(i, 5));
     plan.push({
-      spr, out, pmin, dmin,
+      spr, out, n: 0, pmin, dmin,
       scale: (Number(at(i, 4)) - pmin) / (Number(at(i, 6)) - dmin),
     });
     labels.push(label);
     rates.push(spr / recordDuration);
     signals.push(out);
   }
-  // Int16Array reads are much faster than DataView.getInt16 but use platform byte order;
-  // EDF is little-endian, so fall back to DataView on a big-endian host or unaligned data.
-  const le = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
-  const i16 = le && headerBytes % 2 === 0 ? new Int16Array(arrayBuffer, headerBytes, (numRecords * recordLen) / 2) : null;
   const view = new DataView(arrayBuffer);
-  let off = 0; // in samples from headerBytes
+  let off = headerBytes;
   for (let r = 0; r < numRecords; r++) {
     for (const s of plan) {
-      if (s.out) {
-        const { out, dmin, scale, pmin, spr } = s, base = r * spr;
-        if (i16) for (let k = 0; k < spr; k++) out[base + k] = (i16[off + k] - dmin) * scale + pmin;
-        else for (let k = 0; k < spr; k++) out[base + k] = (view.getInt16(headerBytes + 2 * (off + k), true) - dmin) * scale + pmin;
+      for (let k = 0; k < s.spr; k++, off += 2) {
+        if (!s.out) continue;
+        s.out[s.n++] = (view.getInt16(off, true) - s.dmin) * s.scale + s.pmin;
       }
-      off += s.spr;
     }
   }
   return { labels, rates, duration: numRecords * recordDuration, signals };

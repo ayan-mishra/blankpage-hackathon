@@ -19,13 +19,3 @@ export function checklistName(name) {
   }
   return name.trim();
 }
-
-// The working checklist, shared between app.html and study.html in this browser.
-// Storage can be blocked or hold stale/hostile data, so every access is guarded and re-validated.
-export const SAVED_KEY = 'somnium.checklist';
-export function readSaved(store = globalThis.localStorage) {
-  try { return normalizeRules(JSON.parse(store.getItem(SAVED_KEY)).rules); } catch { return null; }
-}
-export function writeSaved(rules, store = globalThis.localStorage) {
-  try { if (rules) store.setItem(SAVED_KEY, JSON.stringify({ rules })); else store.removeItem(SAVED_KEY); } catch { /* private mode: page still works, just doesn't carry over */ }
-}

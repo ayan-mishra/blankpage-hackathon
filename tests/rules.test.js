@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseRule, evaluate, verdict, proposeRule, DEFAULT_CHECKLIST } from '../src/rules.js';
 
-const win = (o = {}) => ({ flat: 0, quiet: 12, ptp: 50, kurtosis: 0, line50: 0, line60: 0, ...o });
+const win = (o = {}) => ({ flat: 0, ptp: 50, kurtosis: 0, line50: 0, line60: 0, ...o });
 
 test('parseRule understands common phrasings', () => {
   assert.deepEqual(
@@ -13,10 +13,6 @@ test('parseRule understands common phrasings', () => {
     { metric: 'line60', op: '>', value: 0.15 });
   const a = parseRule('amplitude bigger than 250 uV');
   assert.equal(a.metric, 'ptp'); assert.equal(a.value, 250);
-  const pick = (t) => (({ metric, op, value }) => ({ metric, op, value }))(parseRule(t));
-  assert.deepEqual(pick('flag signal below 2 µV'), { metric: 'quiet', op: '<', value: 2 });
-  assert.deepEqual(pick('too faint, 3 uV'), { metric: 'quiet', op: '<', value: 3 }); // faint means low by default
-  assert.deepEqual(pick('swings below 20 µV'), { metric: 'ptp', op: '<', value: 20 }); // explicit swing word keeps ptp
   assert.equal(parseRule('make it nicer'), null);
   assert.equal(parseRule('flatline'), null); // no threshold
 });
@@ -43,13 +39,4 @@ test('proposeRule finds the separating metric', () => {
   assert.equal(r.metric, 'kurtosis');
   assert.ok(r.value > 2 && r.value < 20);
   assert.equal(proposeRule(by, []), null);
-});
-
-test('proposeRule learns a low-is-bad metric as a below rule', () => {
-  const by = [Array.from({ length: 20 }, (_, i) => win({ quiet: 10 + (i % 4), ptp: 60 + (i % 7) * 10 }))];
-  by[0][3] = win({ quiet: 0.8, ptp: 50 }); by[0][4] = win({ quiet: 0.9, ptp: 55 });
-  const r = proposeRule(by, [{ ch: 0, win: 3 }, { ch: 0, win: 4 }]);
-  assert.equal(r.metric, 'quiet');
-  assert.equal(r.op, '<');
-  assert.ok(r.value > 0.9 && r.value < 10, `${r.value}`);
 });
