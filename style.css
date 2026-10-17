@@ -72,3 +72,6 @@ td .hint{margin:2px 0 0}
 code{font-size:.9em;background:#fff3d6;padding:1px 5px;border-radius:4px}
 .pill{white-space:nowrap;display:inline-block}
 th:nth-child(2),td:nth-child(2){min-width:11rem}
+
+.simple{margin:.35em 0 0!important;padding-left:10px;border-left:4px solid var(--bad);color:var(--text);font-size:.95em}
+td .simple{margin-top:6px!important}

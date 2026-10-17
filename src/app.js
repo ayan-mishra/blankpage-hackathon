@@ -78,13 +78,13 @@ function drawEvidence() {
   t.clearRect(0, 0, 9999, 9999);
   if (!S.cell) return box.replaceChildren(Object.assign(document.createElement('p'), { className: 'hint', textContent: 'Select a cell on the map.' }));
   const { ch, win } = S.cell, hits = S.flags.filter((f) => f.ch === ch && f.win === win);
-  const lines = hits.length ? hits.map((f) => explain(f, S.edf.labels, WIN)) : [`${S.edf.labels[ch]}: no rule flagged this cell.`];
+  const lines = hits.length ? hits.flatMap((f) => [explain(f, S.edf.labels, WIN), { simple: METRICS[f.rule.metric].simple }]) : [`${S.edf.labels[ch]}: no rule flagged this cell. Everything looks normal here.`];
   if (S.step > 1) {
     lines.push(`This cell covers ${S.step} windows (${mmss(win * WIN)}–${mmss((win + S.step) * WIN)}); the trace shows one window.`);
   }
   const m = S.by[ch][win];
   lines.push('Metrics: ' + Object.keys(METRICS).map((k) => `${METRICS[k].label} ${fmt(k, m[k])}`).join(' · '));
-  box.replaceChildren(...lines.map((l) => Object.assign(document.createElement('p'), { textContent: l })));
+  box.replaceChildren(...lines.map((l) => Object.assign(document.createElement('p'), typeof l === 'string' ? { textContent: l } : { className: 'simple', textContent: `In plain words: ${l.simple}` })));
   const fs = S.edf.rates[ch], x = S.edf.signals[ch].subarray(win * WIN * fs, (win + 1) * WIN * fs);
   const c = $('trace'); c.width = c.clientWidth * (devicePixelRatio || 1);
   const g = c.getContext('2d'), mx = Math.max(...x.map(Math.abs), 1);

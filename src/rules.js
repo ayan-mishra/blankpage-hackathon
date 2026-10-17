@@ -1,15 +1,20 @@
 // Rules are plain data over a fixed set of documented metrics, never generated code.
 export const METRICS = {
   flat: { label: 'Signal stopped (flat line)', pct: true, cause: 'contact', why: 'The headband probably lost contact with the skin',
-    fix: 'Ask them to clean their forehead and put the headband back on snugly before bed' },
+    fix: 'Ask them to clean their forehead and put the headband back on snugly before bed',
+    simple: 'The sensor stopped touching the skin, so it recorded nothing.' },
   ptp: { label: 'Big swings in the signal (µV)', cause: 'loose', why: 'Usually movement, or a loose headband',
-    fix: 'Check the strap is snug and not shifting on the pillow' },
+    fix: 'Check the strap is snug and not shifting on the pillow',
+    simple: 'The headband was moving around, so the signal went wild.' },
   kurtosis: { label: 'Sudden spikes', cause: 'loose', why: 'Usually a bump, or the headband shifting',
-    fix: 'Check the strap is snug and not shifting on the pillow' },
+    fix: 'Check the strap is snug and not shifting on the pillow',
+    simple: 'Something knocked the headband, which caused sharp jumps.' },
   line50: { label: '50 Hz electrical hum', pct: true, cause: 'hum', why: 'Interference from mains power, or a poor connection',
-    fix: 'Move chargers and cables away from the bed and re-seat the headband' },
+    fix: 'Move chargers and cables away from the bed and re-seat the headband',
+    simple: 'Electricity nearby drowned out the signal, like static on a radio.' },
   line60: { label: '60 Hz electrical hum', pct: true, cause: 'hum', why: 'Interference from mains power, or a poor connection',
-    fix: 'Move chargers and cables away from the bed and re-seat the headband' },
+    fix: 'Move chargers and cables away from the bed and re-seat the headband',
+    simple: 'Electricity nearby drowned out the signal, like static on a radio.' },
 };
 const OPS = { '>': (a, b) => a > b, '<': (a, b) => a < b };
 

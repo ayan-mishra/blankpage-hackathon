@@ -9,6 +9,11 @@ const CAUSE = {
 };
 // Same cut-offs as the 2026 home-sleep study cited on the site: 75% clean = OK, 50-74% = warning, under 50% = fail.
 const CLEAN = 'Clean signal all night.';
+const SIMPLE = {
+  contact: 'The headband stopped touching the skin, so nothing was recorded.',
+  hum: 'Electricity nearby drowned out the signal, like static on a radio.',
+  loose: 'The headband was sliding around, so the signal got messy.',
+};
 const OK_AT = 0.75, CHECK_AT = 0.5;
 
 export const dur = (s) => (s >= 3600 ? `${Math.floor(s / 3600)}h ${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}m` : `${Math.max(1, Math.round(s / 60))}m`);
@@ -48,8 +53,11 @@ export function analyzeNight(by, winSec, checklist, labels = []) {
     const note = `${weak.map((i) => labels[i] || `Channel ${i + 1}`).join(' and ')} had problems for ${Math.round(Math.max(...weak.map((i) => share[i])) * 100)}% of the night, though the other sensor was fine.`;
     summary = summary === CLEAN ? note : `${summary} ${note}`;
   }
+  let simple = 'Everything worked all night.';
+  if (cause && longest) simple = `${SIMPLE[cause]} ${lostToEnd ? 'It never came back.' : 'It got better afterward.'}`;
+  if (weak.length) simple = `${cause && longest ? `${simple} ` : ''}One of the two sensors wasn’t working properly for a while.`;
   const action = status === 'ok' && weak.length ? 'Fine for now. Check that sensor’s contact at the next visit.' : status === 'ok' ? 'Nothing to do.' : (cause ? METRICS[Object.keys(METRICS).find((k) => METRICS[k].cause === cause)].fix : 'Check the headband fit.');
-  return { good, goodPct, status, cause, summary, action, duration: n * winSec };
+  return { good, goodPct, status, cause, summary, simple, action, duration: n * winSec };
 }
 
 export const participantOf = (filename) => {

@@ -51,7 +51,7 @@ function render() {
       el('td', {}, el('b', { textContent: r.participant }), el('div', { className: 'hint', textContent: `${r.file} · ${dur(r.duration)}` })),
       el('td', {}, pill),
       el('td', {}, el('b', { textContent: `${Math.round(r.goodPct * 100)}%` }), timeline(r.good)),
-      el('td', { textContent: r.summary }),
+      el('td', {}, el('div', { textContent: r.summary }), el('div', { className: 'simple', textContent: `In plain words: ${r.simple}` })),
       el('td', { textContent: r.action }));
   }));
 }

@@ -57,3 +57,8 @@ test('csv neutralizes spreadsheet formulas from file names and labels', () => {
   assert.match(csv, /"'=HYPERLINK/); assert.match(csv, /"'\+a\.edf"/); assert.match(csv, /"'@SUM/); assert.match(csv, /"'-1"/);
   assert.doesNotMatch(csv, /(^|,)"[=+\-@]/m);
 });
+
+test('every result has a plain-words line', () => {
+  assert.equal(analyzeNight(night(60, () => false), 10, DEFAULT_CHECKLIST).simple, 'Everything worked all night.');
+  assert.match(analyzeNight(night(60, (i) => i >= 20), 10, DEFAULT_CHECKLIST).simple, /stopped touching the skin.*never came back/);
+});
