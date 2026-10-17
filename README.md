@@ -1,22 +1,20 @@
 # Somnium
 
-**Describe your standard. See what passes.**
+Somnium checks EEG recordings before you analyze them. Drop in an EDF file and you get a map of the usable stretches, with a plain-English reason for every flag. It's built for first-time researchers and for home-sleep data, where headbands slip and recordings often go bad.
 
-Somnium is a browser-based trust check for EEG recordings, built for new researchers and home-sleep data.
-Drop in an EDF file and get a channel × time map of what's usable, with plain-English evidence for every flag.
-The meta part: you write the quality rules yourself, three ways, and save them as a shareable checklist.
+The quality rules are yours to write, in three ways:
 
-- **Say it**: type "flag 60 Hz hum above 15%" and preview what it would flag.
-- **Show it**: drag across a region you consider bad; Somnium proposes the metric and threshold that separate it from the rest.
-- **Tune it**: edit metric, direction and threshold with a live preview.
+- Type one, like "flag 60 Hz hum above 15%", and preview what it would catch before you add it.
+- Drag across a stretch you think is bad, and Somnium suggests the metric and threshold that set it apart from the rest.
+- Edit the metric, direction and threshold by hand, with a live preview.
 
-EEG parsing and analysis run in the browser; recordings are never uploaded.
-Supabase handles accounts and private checklist snapshots.
+Rules save as a checklist you can share. Recordings are parsed and checked in the browser and never uploaded. Supabase only handles accounts and the private checklist snapshots people choose to save.
 
 ## Who it's for
 
-- **Study coordinators** (for example an insomnia study with home sleep headbands): `study.html` takes one EDF per participant-night and shows who is wearing the headband properly, what went wrong in plain words, and what to tell them. Export the table as CSV.
-- **Hobby and first-time researchers**: `app.html` checks a single recording. Every result has a plain-English reason, and there is a glossary instead of jargon.
+Study coordinators. In an insomnia study with home sleep headbands, `study.html` takes one EDF per participant-night and shows who is wearing the headband properly, what went wrong in plain words, and what to tell them. The table exports as CSV.
+
+Hobby and first-time researchers. `app.html` checks a single recording, explains each result in everyday language, and has a glossary instead of jargon.
 
 ## Run
 
@@ -104,22 +102,26 @@ removes this schema **and all saved checklists**; export/back up data before doi
 |---|---|
 | `src/edf.js` | 16-bit EDF parser |
 | `src/metrics.js` | per-window flatline, peak-to-peak, kurtosis, 50/60 Hz share |
-| `src/rules.js` | rules as plain data over those metrics, plain-language parser, "show it" proposal, verdict |
-| `src/map.js` | map geometry: windows → grid columns, and the canvas pixel budget |
-| `src/app.js` | UI |
+| `src/rules.js` | rules as plain data over those metrics, the plain-language parser, the "show it" proposal, the verdict |
+| `src/wear.js` | the headband wear check for a whole night: status, cause, what to tell the participant, CSV |
+| `src/study.js` | the study page (many files, one table) |
+| `src/map.js` | map geometry: windows to grid columns, and the canvas pixel budget |
+| `src/app.js` | the single-recording page |
+| `src/gpu.js` | detects software rendering and shows how to turn hardware acceleration on |
 
-Rules are data over five documented metrics, never generated code, so every flag can be inspected.
+Rules are plain data over five documented metrics, never generated code, so you can inspect every flag.
 
 ## Limits (MVP)
 
-- 16-bit EDF only (no BDF/FIF yet); metrics are per channel, no cross-channel checks.
-- The recording map gets a fixed pixel budget, so a long recording aggregates windows into columns (one column ≈ 3 min of a full night, `src/map.js`). Clicking a column inspects the earliest flagged window in it. Zooming into per-window detail is on the roadmap.
-- Plain-language parsing uses templates; an LLM translation step is the planned upgrade.
-- "Show it" thresholds are proposals from few examples. Check the preview before adding.
-- Not validated against PREP/PyPREP yet, and not for clinical use.
+- It reads 16-bit EDF only (no BDF or FIF yet). Metrics are per channel, with no cross-channel checks.
+- The recording map has a fixed pixel budget, so a long recording is grouped into columns (about 3 minutes each for a full night; see `src/map.js`). Clicking a column opens the earliest flagged window in it. Zooming to single windows is on the roadmap.
+- Plain-language rules are parsed with templates. An LLM translation step is planned.
+- "Show it" proposals come from a handful of examples, so check the preview before adding one.
+- The wear-check cut-offs (75% clean is fine, under 50% is not worn properly) come from a 2026 medRxiv preprint on home sleep EEG that hasn't been peer reviewed.
+- It isn't validated against PREP or PyPREP yet, and it's not for clinical use.
 
 ## Roadmap
 
-Shared checklist library, BDF/FIF support, neighbor-channel correlation, LLM rule translation, methods-section text generated from a checklist.
+A shared checklist library, BDF and FIF support, neighbor-channel correlation, LLM rule translation, and methods-section text generated from a checklist.
 
-`src/edf.js` and `src/metrics.js` were drafted by a free DeepSeek worker via OpenSlave, then reviewed and fixed here.
+`src/edf.js` and `src/metrics.js` were first drafted by a free DeepSeek worker through OpenSlave, then reviewed and fixed here.
