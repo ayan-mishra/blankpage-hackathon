@@ -42,5 +42,14 @@ button:focus-visible,input:focus-visible,select:focus-visible,.drop:focus-within
 #checklist li{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--line)}
 #checklist li:first-child{border-top:0}
 #evidence p{margin:0 0 8px}
+
+[hidden]{display:none!important}
+#account label{display:flex;flex-direction:column;gap:4px;color:var(--mute);font-size:13px}
+#account input,#account select{font-size:15px;max-width:100%;color:var(--text)}
+#account .row{align-items:flex-end}
+#accountStatus.error{color:var(--err)}
+#accountEmail{overflow-wrap:anywhere;max-width:100%}
+#savedChecklists{min-width:220px;max-width:360px}
+@media(max-width:480px){.account-fields label,.account-fields input{width:100%}#savedChecklists{min-width:0;max-width:100%;width:100%}#cloud .row>label{width:100%}}
 noscript p{padding:16px;border:2px solid var(--err);border-radius:6px;background:var(--card)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}

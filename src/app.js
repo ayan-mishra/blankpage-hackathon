@@ -1,3 +1,6 @@
+import { mountAccount } from './account.js';
+import { supabase } from './supabase.js';
+import { normalizeRules } from './checklists.js';
 import { parseEDF } from './edf.js';
 import { windowMetrics } from './metrics.js';
 import { METRICS, DEFAULT_CHECKLIST, evaluate, verdict, explain, fmt, parseRule, proposeRule } from './rules.js';
@@ -175,8 +178,7 @@ $('export').onclick = () => {
 $('import').onchange = async (e) => {
   try {
     const rules = JSON.parse(await e.target.files[0].text()).rules;
-    if (!Array.isArray(rules) || !rules.every((r) => METRICS[r.metric] && ['>', '<'].includes(r.op) && Number.isFinite(r.value))) throw 0;
-    S.checklist = rules.map((r, i) => ({ id: `i${i}`, name: String(r.name ?? r.metric).slice(0, 60), metric: r.metric, op: r.op, value: r.value }));
+    S.checklist = normalizeRules(rules);
     refresh();
   } catch { $('ruleError').textContent = 'That file isn’t a valid Somnium checklist.'; }
   e.target.value = '';
@@ -193,3 +195,11 @@ $('drop').ondragleave = () => $('drop').classList.remove('over');
 $('drop').ondrop = (e) => { e.preventDefault(); $('drop').classList.remove('over'); e.dataTransfer.files[0] && openFile(e.dataTransfer.files[0]); };
 $('demo').onclick = () => load(makeDemo());
 if (new URLSearchParams(location.search).has('demo')) load(makeDemo());
+
+mountAccount(supabase, {
+  getRules: () => S.checklist,
+  setRules: rules => {
+    S.checklist = rules;
+    if (S.edf) { clearProposal(); refresh(); }
+  },
+});
