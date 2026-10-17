@@ -1,8 +1,6 @@
 import { normalizeRules, checklistName } from './checklists.js';
+import { NEXT_KEY, submitAuth } from './auth.js';
 
-// Where the visitor was headed (e.g. app.html?demo). Email confirmation links land on
-// plain app.html, so the intent is remembered in this browser across that round trip.
-const NEXT_KEY = 'somnium.next';
 const here = () => location.pathname + location.search;
 function takeIntent() {
   let next = null;
@@ -30,7 +28,6 @@ export function mountAccount(client, { getRules, setRules, onSignedIn, onSignedO
   const cloud = $('cloud'); // saved checklists live only on app.html
   let session = null, recovery = false, busy = false, ready = false, generation = 0, intent = undefined;
   let saved = [];
-  const redirectTo = new URL('app.html', location.href).href;
   function render() {
     const inside = !!session && !recovery;
     $('gate').hidden = inside;
@@ -92,21 +89,10 @@ export function mountAccount(client, { getRules, setRules, onSignedIn, onSignedO
     event.preventDefault();
     const action = event.submitter?.value ?? 'login';
     run(async () => {
-      const email = $('email').value.trim(), password = $('password').value;
-      let result;
-      if (action === 'reset') {
-        result = await client.auth.resetPasswordForEmail(email, { redirectTo });
-      } else if (action === 'signup') {
-        if (password.length < 8) throw new Error('Use a password with at least 8 characters.');
-        try { localStorage.setItem(NEXT_KEY, here()); } catch { /* storage blocked: lands on plain app.html */ }
-        result = await client.auth.signUp({ email, password, options: { emailRedirectTo: redirectTo } });
-      } else {
-        result = await client.auth.signInWithPassword({ email, password });
-      }
-      if (result.error) throw result.error;
+      const outcome = await submitAuth(client, action, $('email').value.trim(), $('password').value, here());
       $('password').value = '';
-      if (action === 'reset') status('If that address has an account, a password reset email is on its way.');
-      else if (action === 'signup' && !result.data.session) status('Check your email and click the link to confirm your account. It brings you back here, signed in.');
+      if (outcome === 'reset') status('If that address has an account, a password reset email is on its way.');
+      else if (outcome === 'confirm') status('Check your email and click the link to confirm your account. It brings you back here, signed in.');
     });
   };
   $('forgotPassword').onclick = () => { $('password').required = false; };

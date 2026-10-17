@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Somnium · Can you trust this night of sleep?</title>
-<meta name="description" content="Somnium checks EEG recordings before you analyze them, with plain-English evidence and rules you write yourself. Runs in your browser.">
+<meta name="description" content="Somnium checks EEG recordings before you analyze them, with plain-English evidence and rules you write yourself.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%276%27 fill=%27%23fbf1ef%27/%3E%3Cpath d=%27M2 17l4-1 3-8 4 17 4-14 3 9 3-4 5 1%27 fill=%27none%27 stroke=%27%23191a33%27 stroke-width=%272.4%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E">
 <meta name="theme-color" content="#fbf1ef">
 <!-- ponytail: og:image is root-relative because the deployed domain isn't fixed yet; some scrapers (Facebook, LinkedIn) need an absolute URL, so swap in https://<domain>/og.png once it is known. -->
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Somnium">
 <meta property="og:title" content="Somnium · Can you trust this night of sleep?">
-<meta property="og:description" content="Check home EEG recordings before you analyze them. Every flag comes with its reason, and you write the quality rules. Runs in your browser.">
+<meta property="og:description" content="Check home EEG recordings before you analyze them. Every flag comes with its reason, and you write the quality rules.">
 <meta property="og:image" content="/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -37,16 +37,36 @@
   <h1><span class="ln"><span>Can you trust</span></span><span class="ln"><span>this night of sleep?</span></span></h1>
   <div class="hero-row">
     <div class="hero-copy">
-      <p class="lead">Home sleep headbands slip, lose skin contact or stop recording, and nothing warns you. Somnium checks each EEG recording before you analyze it and shows which nights to keep.</p>
+      <p class="lead">Somnium analyzes EEGs to catch common mistakes in readings such as headbands slipping, loss of skin contact, and recording stopping, showing you which nights to keep.</p>
       <p class="yours"><strong>You write the quality rules.</strong> Type one like <q>flag 60 Hz hum above 15%</q>, drag across a bad stretch, or set the numbers yourself.</p>
       <p class="actions"><a class="btn" href="app.html?demo">Check a demo recording</a><a class="btn alt" href="study.html?sample">See a sample study</a></p>
-      <p class="note">Analysis runs in your browser. Recordings are stored privately in your account only if you keep them. <a href="#how">See how it works</a></p>
+      <p class="note" id="demoNote">Both open after you sign in.</p>
     </div>
+    <section class="auth" id="heroAuth" aria-labelledby="authTitle">
+      <h2 id="authTitle" class="auth-title">Open Somnium</h2>
+      <form id="heroForm" novalidate>
+        <div class="fields">
+          <label class="field">Email<input id="heroEmail" type="email" autocomplete="email" maxlength="254" aria-describedby="heroStatus"></label>
+          <label class="field">Password<input id="heroPassword" type="password" autocomplete="current-password" maxlength="128" aria-describedby="heroStatus"></label>
+        </div>
+        <div class="auth-actions">
+          <button class="btn" value="login">Sign in</button>
+          <button class="btn alt" value="signup">Create account</button>
+          <button class="forgot" value="reset">Forgot password?</button>
+        </div>
+      </form>
+      <div id="heroSignedIn" class="signed-in" hidden>
+        <p>Signed in as <strong id="heroWho"></strong></p>
+        <p class="auth-actions"><a class="btn" href="app.html">Open the app <span aria-hidden="true">→</span></a><button id="heroSignOut" type="button" class="forgot">Sign out</button></p>
+      </div>
+      <p class="auth-status" id="heroStatus" role="status" aria-live="polite" tabindex="-1"></p>
+    </section>
+  </div>
+  <div class="strip"><canvas id="heroChart" aria-hidden="true"></canvas>
     <div class="verdicts" aria-hidden="true">
       <div class="vs v1">usable</div><div class="vs v2">usable after fixes</div><div class="vs v3">not usable</div>
     </div>
   </div>
-  <div class="strip"><canvas id="heroChart" aria-hidden="true"></canvas></div>
 </header>
 
 <main>
@@ -62,8 +82,8 @@
   </section>
   <section class="step" data-step="2">
     <div class="copy">
-      <h2>Drop in the file. It’s read right here, in your browser.</h2>
-      <p>Somnium scans every channel in five-second windows and marks what looks wrong. The recording is stored privately in your account only if you keep it.</p>
+      <h2>Drop in the file.</h2>
+      <p>Somnium scans every channel in five-second windows and marks what looks wrong.</p>
     </div>
     <figure class="stage" data-step="2" aria-hidden="true"><svg class="chart" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet"></svg></figure>
   </section>
@@ -104,7 +124,7 @@
       <p class="sub"><a href="study.html">Or drop in one EDF per night</a></p>
     </div>
   </div>
-  <p class="fine">Analysis runs in your browser. Not for clinical use. Checks are not yet validated against PREP.</p>
+  <p class="fine">Not for clinical use. Checks are not yet validated against PREP.</p>
   <div class="strip end"><canvas id="endChart" aria-hidden="true"></canvas></div>
 </section>
 </main>
