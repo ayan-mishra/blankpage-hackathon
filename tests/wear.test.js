@@ -51,3 +51,9 @@ test('one failing sensor is reported even when the night counts as worn', () => 
   assert.match(r.summary, /F7-Fpz had problems for 50% of the night/);
   assert.match(r.action, /next visit/);
 });
+
+test('csv neutralizes spreadsheet formulas from file names and labels', () => {
+  const csv = toCsv([{ participant: '=HYPERLINK("http://x")', file: '+a.edf', status: 'ok', goodPct: 1, duration: 60, summary: '@SUM(A1)', action: '-1' }]);
+  assert.match(csv, /"'=HYPERLINK/); assert.match(csv, /"'\+a\.edf"/); assert.match(csv, /"'@SUM/); assert.match(csv, /"'-1"/);
+  assert.doesNotMatch(csv, /(^|,)"[=+\-@]/m);
+});

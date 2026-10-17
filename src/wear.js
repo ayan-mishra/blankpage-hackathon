@@ -57,7 +57,11 @@ export const participantOf = (filename) => {
   return stem.split(/[_\-\s]/)[0] || stem;
 };
 
-const q = (v) => `"${String(v).replace(/"/g, '""')}"`;
+// Spreadsheet apps run cells starting with = + - @ as formulas; names and channel labels come from user files.
+const q = (v) => {
+  const t = typeof v === 'string' && /^[=+\-@\t\r]/.test(v) ? `'${v}` : String(v);
+  return `"${t.replace(/"/g, '""')}"`;
+};
 export function toCsv(rows) {
   const head = ['Participant', 'File', 'Status', 'Clean signal %', 'Recording length', 'What happened', 'What to do'];
   const body = rows.map((r) => [r.participant, r.file, r.error ? 'Could not read' : STATUS[r.status], r.error ? '' : Math.round(r.goodPct * 100), r.error ? '' : dur(r.duration), r.error || r.summary, r.error ? 'Re-export the file and try again' : r.action]);
