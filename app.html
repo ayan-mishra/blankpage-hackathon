@@ -57,16 +57,19 @@
     </div>
 
     <div class="grid">
-      <div class="card">
-        <h2>Evidence</h2>
-        <div id="evidence" aria-live="polite"></div>
-        <canvas id="trace" height="120" role="img" aria-label="Raw signal for the selected square"></canvas>
-      </div>
+      <details class="card" id="evidenceBox">
+        <summary class="box-head"><h2>Evidence</h2><span class="summary-meta" id="evidenceMeta">Click a square on the map</span><span class="mark" aria-hidden="true"></span></summary>
+        <div class="box-body">
+          <div id="evidence" aria-live="polite"></div>
+          <canvas id="trace" height="120" role="img" aria-label="Raw signal for the selected square"></canvas>
+        </div>
+      </details>
 
-      <section class="card" id="ruleBox" aria-labelledby="rulesHeading">
-        <div class="row-head"><h2 id="rulesHeading">Your rules</h2>
-          <span class="row-tools"><button id="export" class="ghost small">Export</button><label class="ghost btn small">Import<input type="file" id="import" accept=".json" class="sr-only"></label></span></div>
+      <details class="card" id="ruleBox" open aria-labelledby="rulesHeading">
+        <summary class="box-head"><h2 id="rulesHeading">Your rules</h2><span class="summary-meta" id="rulesMeta"></span><span class="mark" aria-hidden="true"></span></summary>
+        <div class="box-body">
         <p class="hint">The verdict comes from these rules. Change them and it updates.</p>
+        <div class="row-tools"><button id="export" class="ghost small">Export</button><label class="ghost btn small">Import<input type="file" id="import" accept=".json" class="sr-only"></label></div>
         <div id="tryIt" class="tryit" hidden>
           <p><strong>Try it.</strong> This demo starts with a checklist from a lab on 50 Hz power, but it was recorded on 60 Hz power. One channel has hum the checklist misses.</p>
           <ol>
@@ -91,7 +94,8 @@
         <h3>Applied now</h3>
         <ul id="checklist"></ul>
         <p class="hint"><a href="study.html">Apply these rules to a study →</a></p>
-      </section>
+        </div>
+      </details>
     </div>
   </section>
   <section id="account" class="card" aria-labelledby="accountHeading">

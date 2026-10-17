@@ -13,6 +13,26 @@ const $ = (id) => document.getElementById(id);
 const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const S = { edf: null, name: '', file: null, demo: false, by: [], checklist: readSaved() ?? [...DEFAULT_CHECKLIST], flags: [], preview: new Set(), sel: null, cell: null, rule: null, step: 1, cols: 0, last: null, change: null, starter: false };
 
+// Result boxes fold away. They open themselves when there is something to show: an
+// explicit action (teaching a rule) always unfolds, a passive one (clicking a square)
+// respects a box the visitor folded by hand.
+const BOXES = ['evidenceBox', 'ruleBox'];
+const autoOpen = (id, force = false) => {
+  const box = $(id);
+  if (force) delete box.dataset.folded;
+  else if (box.dataset.folded === '1') return;
+  box.open = true;
+};
+BOXES.forEach((id) => {
+  const box = $(id);
+  box.querySelector('summary').addEventListener('click', () => { box.dataset.folded = box.open ? '1' : '0'; });
+});
+function resetBoxes() { // a fresh report: Evidence folded, your rules unfolded
+  const ev = $('evidenceBox'), rules = $('ruleBox');
+  delete ev.dataset.folded; delete rules.dataset.folded;
+  ev.open = false; rules.open = true;
+}
+
 // The demo starts from a 50 Hz lab's checklist (no 60 Hz rule) so the visitor can teach the
 // missing rule from C4's hum and watch the verdict change. Real files get the saved or full default.
 // The starter is not saved for study.html until the visitor edits it (S.starter tracks that).
@@ -73,6 +93,7 @@ function load(edf, { demo = false, name = '', checklist = null } = {}) {
   $('loaded').textContent = `Showing ${demo ? 'the demo recording' : name}: ${edf.labels.length} channels, ${hhmm(n * WIN)}.`;
   $('load').classList.add('loaded');
   $('report').hidden = false;
+  resetBoxes();
   refresh();
   history.refresh();
 }
@@ -149,11 +170,15 @@ function drawEvidence() {
   $('trace').hidden = !S.cell; // no empty box before something is selected
   if (S.sel) {
     const chs = S.sel.ch1 - S.sel.ch0 + 1, secs = (endWinOf(S.sel.col1) - firstWinOf(S.sel.col0)) * WIN;
+    $('evidenceMeta').textContent = `${chs} channel${chs > 1 ? 's' : ''} · ${mmss(secs)} selected`;
+    autoOpen('evidenceBox');
     return box.replaceChildren(el('p', { className: 'hint', textContent: `Selected ${chs} channel${chs > 1 ? 's' : ''} over ${mmss(secs)} (${S.edf.labels[S.sel.ch0]}${chs > 1 ? `–${S.edf.labels[S.sel.ch1]}` : ''}, from ${mmss(firstWinOf(S.sel.col0) * WIN)}). Press “Teach a rule from selection” to get a suggested rule.` }));
   }
-  if (!S.cell) return box.replaceChildren(el('p', { className: 'hint', textContent: 'Click a square on the map to see why it was flagged, or why not.' }));
+  if (!S.cell) { $('evidenceMeta').textContent = 'Click a square on the map'; return box.replaceChildren(el('p', { className: 'hint', textContent: 'Click a square on the map to see why it was flagged, or why not.' })); }
   const { ch, win } = S.cell, hits = S.flags.filter((f) => f.ch === ch && f.win === win);
   const end = S.step > 1 ? win + S.step : win + 1;
+  $('evidenceMeta').textContent = `${S.edf.labels[ch]} · ${mmss(win * WIN)}–${mmss(end * WIN)} · ${hits.length ? 'flagged' : 'clean'}`;
+  autoOpen('evidenceBox');
   const title = el('h3', { className: 'ev-title' }, `${S.edf.labels[ch]} · ${mmss(win * WIN)}–${mmss(end * WIN)} `,
     el('span', { className: `badge ${hits.length ? 'bad' : 'ok'}`, textContent: hits.length ? 'Flagged' : 'Clean' }));
   const body = hits.length
@@ -178,6 +203,7 @@ function drawEvidence() {
 function drawChecklist() {
   const counts = new Map();
   S.flags.forEach((f) => counts.set(f.rule, (counts.get(f.rule) || 0) + 1));
+  $('rulesMeta').textContent = `${S.checklist.length} rule${S.checklist.length === 1 ? '' : 's'} · flags ${pct(S.last.bad)} of the recording`;
   $('checklist').replaceChildren(...S.checklist.map((r, i) => {
     const mine = !DEFAULT_CHECKLIST.some((d) => d.id === r.id);
     const n = counts.get(r) || 0;
@@ -243,6 +269,7 @@ const unit = (m) => (METRICS[m].pct ? 100 : 1);
 function showProposal(rule) {
   S.rule = rule;
   $('proposal').hidden = false;
+  autoOpen('ruleBox', true);
   $('pMetric').value = rule.metric; $('pOp').value = rule.op; $('pValue').value = +(rule.value * unit(rule.metric)).toFixed(2);
   updatePreview();
   $('proposal').scrollIntoView({ block: 'nearest' });
@@ -276,6 +303,7 @@ $('ruleForm').onsubmit = (e) => {
   if (r.metric === 'line60') $('step2').classList.add('done');
 };
 $('teach').onclick = () => {
+  autoOpen('ruleBox', true); // the proposal (or the "no measure sets that region apart" note) lives in this box
   const cells = [];
   for (let c = S.sel.ch0; c <= S.sel.ch1; c++) for (let col = S.sel.col0; col <= S.sel.col1; col++) {
     for (let w = firstWinOf(col); w < endWinOf(col); w++) cells.push({ ch: c, win: w });
