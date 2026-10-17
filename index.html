@@ -6,6 +6,20 @@
 <title>Somnium · Can you trust this night of sleep?</title>
 <meta name="description" content="Somnium checks EEG recordings before you analyze them, with plain-English evidence and rules you write yourself. Runs in your browser.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%276%27 fill=%27%23fbf1ef%27/%3E%3Cpath d=%27M2 17l4-1 3-8 4 17 4-14 3 9 3-4 5 1%27 fill=%27none%27 stroke=%27%23191a33%27 stroke-width=%272.4%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E">
+<meta name="theme-color" content="#fbf1ef">
+<!-- ponytail: og:image is root-relative because the deployed domain isn't fixed yet; some scrapers (Facebook, LinkedIn) need an absolute URL, so swap in https://<domain>/og.png once it is known. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Somnium">
+<meta property="og:title" content="Somnium · Can you trust this night of sleep?">
+<meta property="og:description" content="Check home EEG recordings before you analyze them. Every flag comes with its reason, and you write the quality rules. Runs in your browser.">
+<meta property="og:image" content="/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Somnium: an EEG trace with a flatline and 60 Hz hum marked, under the question Can you trust this night of sleep?">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Somnium · Can you trust this night of sleep?">
+<meta name="twitter:description" content="Check home EEG recordings before you analyze them. Every flag comes with its reason, and you write the quality rules.">
+<meta name="twitter:image" content="/og.png">
 <script>document.documentElement.classList.add("js")</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,18 +28,19 @@
 </head>
 <body>
 <div class="progress" id="progress" aria-hidden="true"></div>
-<nav>
+<nav aria-label="Main">
   <a class="mark" href="#top">Somnium</a>
-  <a class="navlink" href="app.html">Open the app</a>
+  <span class="navlinks"><a class="navlink" href="app.html">One recording</a><a class="navlink" href="study.html">A study</a></span>
 </nav>
 
 <header class="hero" id="top">
   <h1><span class="ln"><span>Can you trust</span></span><span class="ln"><span>this night of sleep?</span></span></h1>
   <div class="hero-row">
     <div class="hero-copy">
-      <p class="lead">Somnium checks an EEG recording before you analyze it, so you know which nights to keep.</p>
-      <p class="for">Made for first-time EEG researchers and sleep labs working with home-headband recordings.</p>
-      <p class="actions"><a class="btn" href="app.html?demo">Try the demo recording</a><a class="plain" href="#how">See how it works</a></p>
+      <p class="lead">Home sleep headbands slip, lose skin contact or stop recording, and nothing warns you. Somnium checks each EEG recording before you analyze it and shows which nights to keep.</p>
+      <p class="yours"><strong>You write the quality rules.</strong> Type one like <q>flag 60 Hz hum above 15%</q>, drag across a bad stretch, or set the numbers yourself.</p>
+      <p class="actions"><a class="btn" href="app.html?demo">Check a demo recording</a><a class="btn alt" href="study.html?sample">See a sample study</a></p>
+      <p class="note">Runs in your browser. Nothing is uploaded. <a href="#how">See how it works</a></p>
     </div>
     <div class="verdicts" aria-hidden="true">
       <div class="vs v1">usable</div><div class="vs v2">usable after fixes</div><div class="vs v3">not usable</div>
@@ -34,6 +49,7 @@
   <div class="strip"><canvas id="heroChart" aria-hidden="true"></canvas></div>
 </header>
 
+<main>
 <div class="story" id="how">
   <section class="step" data-step="1">
     <div class="copy">
@@ -60,27 +76,38 @@
   </section>
   <section class="step" data-step="4">
     <div class="copy">
-      <h2>Your lab’s standard, written your way.</h2>
-      <p>Type a rule in plain words. Or drag across a stretch you know is bad and let Somnium propose the threshold. Or tune the numbers yourself. Each rule shows what it would flag before you add it.</p>
+      <h2>Write your own rules.</h2>
+      <p>Type a rule in plain words, or drag across a stretch you know is bad and let Somnium propose the threshold, or just set the numbers yourself. Whichever you pick, the rule shows what it would flag before you add it.</p>
     </div>
-    <figure class="stage" data-step="4" aria-hidden="true"><svg class="chart" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet"></svg><div class="composer"><p><b>Say it</b> <span id="sayText"></span></p><p><b>Show it</b> drag across the spikes, get <i>spikiness above 39</i></p><p><b>Tune it</b> change the number, watch the marks</p></div></figure>
+    <figure class="stage" data-step="4" aria-hidden="true"><svg class="chart" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet"></svg><div class="composer"><p><b>Say it</b> <span id="sayText"></span></p><p id="showIt"><b>Show it</b> drag across a bad stretch, get <i>a suggested rule</i></p><p><b>Tune it</b> change the number, watch the marks</p></div></figure>
   </section>
   <section class="step" data-step="5">
     <div class="copy">
-      <h2>A verdict you can defend. A checklist you can share.</h2>
-      <p>Save your rules as a file, run the same standard on the next recording, or hand it to the next student.</p>
+      <h2>Save your rules and reuse them.</h2>
+      <p>Your rules save as a file. Run the same standard on the next recording, or hand the file to the next student.</p>
     </div>
     <figure class="stage" data-step="5" aria-hidden="true"><svg class="chart" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet"></svg><div class="stamp" id="stamp"><strong></strong><span></span><code>somnium-checklist.json</code></div></figure>
   </section>
 </div>
 
-<section class="finale">
-  <h2>Try it on a demo recording.</h2>
-  <p>Six channels, five minutes, three known faults. Or drop in your own EDF file.</p>
-  <p class="actions"><a class="btn" href="app.html?demo">Open the demo</a><a class="plain" href="app.html">Drop your own EDF</a></p>
+<section class="finale" aria-labelledby="start-h">
+  <h2 id="start-h">Pick where to start.</h2>
+  <div class="paths">
+    <div class="path">
+      <h3><a href="app.html?demo">One recording <span aria-hidden="true">→</span></a></h3>
+      <p>For a first-time researcher. Opens a five-minute demo with six channels. It catches two faults on its own, explained in plain words, and you teach it the third.</p>
+      <p class="sub"><a href="app.html">Or drop in your own EDF file</a></p>
+    </div>
+    <div class="path">
+      <h3><a href="study.html?sample">A whole study <span aria-hidden="true">→</span></a></h3>
+      <p>For a study coordinator. Eight participant-nights in one table: who wore the headband properly, what went wrong, and what to tell them.</p>
+      <p class="sub"><a href="study.html">Or drop in one EDF per night</a></p>
+    </div>
+  </div>
   <p class="fine">Runs entirely in your browser. Not for clinical use. Checks are not yet validated against PREP.</p>
   <div class="strip end"><canvas id="endChart" aria-hidden="true"></canvas></div>
 </section>
+</main>
 <script type="module" src="src/landing.js"></script>
 </body>
 </html>
