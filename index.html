@@ -11,41 +11,46 @@
 <link rel="stylesheet" href="landing.css">
 </head>
 <body>
+<div class="progress" id="progress" aria-hidden="true"></div>
 <nav>
-  <a class="mark" href="./">Somnium</a>
+  <a class="mark" href="#top">Somnium</a>
   <a class="navlink" href="app.html">Open the app</a>
 </nav>
 
-<div class="story">
-  <div class="steps">
-    <section class="step" data-step="0">
-      <h1>Can you trust this night of sleep?</h1>
+<header class="hero" id="top">
+  <h1><span class="ln"><span>Can you trust</span></span><span class="ln"><span>this night of sleep?</span></span></h1>
+  <div class="hero-row">
+    <div class="hero-copy">
       <p class="lead">Somnium checks an EEG recording before you analyze it, so you know which nights to keep.</p>
       <p class="for">Made for first-time EEG researchers and sleep labs working with home-headband recordings.</p>
       <p class="actions"><a class="btn" href="app.html?demo">Try the demo recording</a><a class="plain" href="#how">See how it works</a></p>
-    </section>
+    </div>
+    <div class="verdicts" aria-hidden="true">
+      <div class="vs v1">usable</div><div class="vs v2">usable after fixes</div><div class="vs v3">not usable</div>
+    </div>
+  </div>
+  <div class="strip"><canvas id="heroChart" aria-hidden="true"></canvas></div>
+</header>
 
-    <section class="step" id="how" data-step="1">
+<div class="story" id="how">
+  <div class="steps">
+    <section class="step" data-step="1">
       <h2>Forty recordings. Nobody told you which ones are usable.</h2>
       <p>Home headbands lose contact, pick up mains hum and drop out. In a 2026 preprint of 100 home recordings, about one in four was degraded or lost entirely.</p>
       <p>You usually find out after the analysis, or never. <a href="https://www.medrxiv.org/content/10.64898/2026.06.01.26354591v1.full.pdf">Source: medRxiv preprint</a></p>
     </section>
-
     <section class="step" data-step="2">
       <h2>Drop in the file. It’s read right here, in your browser.</h2>
       <p>Somnium scans every channel in five-second windows and marks what looks wrong. Nothing is uploaded.</p>
     </section>
-
     <section class="step" data-step="3">
       <h2>Every mark comes with its reason.</h2>
       <p>Click a mark to see the measurement, the rule that tripped, and what usually causes it. You can check the reasoning instead of trusting a score.</p>
     </section>
-
     <section class="step" data-step="4">
       <h2>Your lab’s standard, written your way.</h2>
       <p>Type a rule in plain words. Or drag across a stretch you know is bad and let Somnium propose the threshold. Or tune the numbers yourself. Each rule shows what it would flag before you add it.</p>
     </section>
-
     <section class="step" data-step="5">
       <h2>A verdict you can defend. A checklist you can share.</h2>
       <p>Save your rules as a file, run the same standard on the next recording, or hand it to the next student.</p>
@@ -57,11 +62,11 @@
       <svg id="chart" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet"></svg>
       <div class="callout" id="callout"></div>
       <div class="composer" id="composer">
-        <p><b>Say it</b> “flag 60 Hz hum above 15%”</p>
-        <p><b>Show it</b> drag across the spikes → <i>spikiness above 39</i></p>
+        <p><b>Say it</b> <span id="sayText"></span></p>
+        <p><b>Show it</b> drag across the spikes, get <i>spikiness above 39</i></p>
         <p><b>Tune it</b> change the number, watch the marks</p>
       </div>
-      <div class="stamp" id="stamp"></div>
+      <div class="stamp" id="stamp"><strong></strong><span></span><code>somnium-checklist.json</code></div>
     </div>
   </div>
 </div>
@@ -71,6 +76,7 @@
   <p>Six channels, five minutes, three known faults. Or drop in your own EDF file.</p>
   <p class="actions"><a class="btn" href="app.html?demo">Open the demo</a><a class="plain" href="app.html">Drop your own EDF</a></p>
   <p class="fine">Runs entirely in your browser. Not for clinical use. Checks are not yet validated against PREP.</p>
+  <div class="strip end"><canvas id="endChart" aria-hidden="true"></canvas></div>
 </section>
 <script type="module" src="src/landing.js"></script>
 </body>
