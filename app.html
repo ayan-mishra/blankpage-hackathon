@@ -17,81 +17,93 @@
   <h1><a href="./">Somnium</a></h1>
   <p class="tag">Describe your standard. See what passes.</p>
 </header>
-<main>
-  <section id="account" class="card" aria-labelledby="accountHeading">
-    <div class="row-head"><h2 id="accountHeading">Your account</h2><span class="hint">Save your standards. Keep recordings local.</span></div>
-    <form id="authForm" hidden>
-      <div class="row account-fields">
-        <label>Email<input id="email" type="email" autocomplete="email" required maxlength="254"></label>
-        <label>Password<input id="password" type="password" autocomplete="current-password" required maxlength="128"></label>
-      </div>
-      <div class="row">
-        <button id="login" name="action" value="login">Sign in</button>
-        <button id="signup" name="action" value="signup" class="ghost">Create account</button>
-        <button id="forgotPassword" name="action" value="reset" class="ghost">Send password reset</button>
-      </div>
-    </form>
-    <div id="signedIn" hidden><div class="row"><span id="accountEmail"></span><button id="signOut" class="ghost">Sign out</button></div></div>
-    <form id="recoveryForm" hidden>
-      <div class="row"><label>New password<input id="newPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label><button>Update password</button></div>
-    </form>
-    <div id="cloud" hidden>
-      <form id="saveForm" class="row"><label>Checklist name<input id="checklistName" maxlength="80" required placeholder="e.g. Sleep lab standard"></label><button id="saveChecklist">Save current checklist</button></form>
-      <div class="row"><label>Saved checklists<select id="savedChecklists"></select></label><button id="loadChecklist" class="ghost">Load</button><button id="deleteChecklist" class="ghost">Delete</button><button id="refreshChecklists" class="ghost">Refresh</button></div>
-      <p class="hint">Each save creates a private snapshot. Only rules and the checklist name are stored.</p>
+<div class="shell">
+  <aside id="history" class="card" aria-labelledby="historyHeading">
+    <div class="row-head"><h2 id="historyHeading">Previous analyses</h2></div>
+    <div class="row history-actions">
+      <button id="saveAnalysis" type="button" disabled>Save analysis</button>
+      <button id="syncAnalyses" type="button" class="ghost" disabled title="Sync with your account">Sync</button>
     </div>
-    <p id="accountStatus" class="hint" role="status" aria-live="polite">Connecting to your account…</p>
-  </section>
-  <section id="load" class="card">
-    <label class="drop" id="drop">
-      <input type="file" id="file" accept=".edf,.EDF" hidden>
-      <strong>Drop an EDF recording</strong> or click to choose
-      <span>EEG recordings stay in your browser. Only checklists you save go to your account.</span>
-    </label>
-    <button id="demo" class="ghost">Try the demo recording</button>
-    <p id="error" role="alert"></p>
-  </section>
-
-  <section id="report" hidden>
-    <div id="verdict" class="card"></div>
-
-    <div class="card">
-      <div class="row-head"><h2>Recording map</h2><span class="hint">Click a cell for evidence · drag across cells to teach a rule</span></div>
-      <div id="mapwrap"><canvas id="map"></canvas></div>
-      <div class="legend"><i class="ok"></i>clean <i class="bad"></i>flagged <i class="pre"></i>would be flagged by the rule you’re previewing</div>
-    </div>
-
-    <div class="grid">
-      <div class="card">
-        <h2>Evidence</h2>
-        <div id="evidence"><p class="hint">Select a cell on the map.</p></div>
-        <canvas id="trace" height="120"></canvas>
-      </div>
-
-      <div class="card">
-        <h2>Add a rule</h2>
-        <div class="row"><input id="ruleText" placeholder="e.g. flag 60 Hz hum above 15%" aria-label="Describe a rule"><button id="ruleGo">Preview</button></div>
-        <div class="row"><button id="teach" class="ghost" disabled>Teach from selection</button><span class="hint" id="teachHint">Drag across the map first.</span></div>
-        <div id="proposal" hidden>
-          <div class="row">
-            <select id="pMetric"></select>
-            <select id="pOp"><option>&gt;</option><option>&lt;</option></select>
-            <input id="pValue" type="number" step="any">
-          </div>
-          <p id="pCount" class="hint"></p>
-          <div class="row"><button id="pAdd">Add to checklist</button><button id="pCancel" class="ghost">Cancel</button></div>
+    <p class="hint" id="historyStatus" aria-live="polite">No analyses saved yet.</p>
+    <p class="hint" id="historyEmpty">Load a recording, then save it here to build your history.</p>
+    <ul id="historyList" hidden></ul>
+  </aside>
+  <main>
+    <section id="account" class="card" aria-labelledby="accountHeading">
+      <div class="row-head"><h2 id="accountHeading">Your account</h2><span class="hint">Save your standards. Keep recordings local.</span></div>
+      <form id="authForm" hidden>
+        <div class="row account-fields">
+          <label>Email<input id="email" type="email" autocomplete="email" required maxlength="254"></label>
+          <label>Password<input id="password" type="password" autocomplete="current-password" required maxlength="128"></label>
         </div>
-        <p id="ruleError" class="hint"></p>
+        <div class="row">
+          <button id="login" name="action" value="login">Sign in</button>
+          <button id="signup" name="action" value="signup" class="ghost">Create account</button>
+          <button id="forgotPassword" name="action" value="reset" class="ghost">Send password reset</button>
+        </div>
+      </form>
+      <div id="signedIn" hidden><div class="row"><span id="accountEmail"></span><button id="signOut" class="ghost">Sign out</button></div></div>
+      <form id="recoveryForm" hidden>
+        <div class="row"><label>New password<input id="newPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label><button>Update password</button></div>
+      </form>
+      <div id="cloud" hidden>
+        <form id="saveForm" class="row"><label>Checklist name<input id="checklistName" maxlength="80" required placeholder="e.g. Sleep lab standard"></label><button id="saveChecklist">Save current checklist</button></form>
+        <div class="row"><label>Saved checklists<select id="savedChecklists"></select></label><button id="loadChecklist" class="ghost">Load</button><button id="deleteChecklist" class="ghost">Delete</button><button id="refreshChecklists" class="ghost">Refresh</button></div>
+        <p class="hint">Each save creates a private snapshot. Only rules and the checklist name are stored.</p>
       </div>
-    </div>
+      <p id="accountStatus" class="hint" role="status" aria-live="polite">Connecting to your account…</p>
+    </section>
+    <section id="load" class="card">
+      <label class="drop" id="drop">
+        <input type="file" id="file" accept=".edf,.EDF" hidden>
+        <strong>Drop an EDF recording</strong> or click to choose
+        <span>EEG recordings stay in your browser. Only checklists you save go to your account.</span>
+      </label>
+      <button id="demo" class="ghost">Try the demo recording</button>
+      <p id="error" role="alert"></p>
+    </section>
 
-    <div class="card">
-      <div class="row-head"><h2>Checklist</h2>
-        <span><button id="export" class="ghost">Export</button> <label class="ghost btn">Import<input type="file" id="import" accept=".json" hidden></label></span></div>
-      <ul id="checklist"></ul>
-    </div>
-  </section>
-</main>
+    <section id="report" hidden>
+      <div id="verdict" class="card"></div>
+
+      <div class="card">
+        <div class="row-head"><h2>Recording map</h2><span class="hint">Click a cell for evidence · drag across cells to teach a rule</span></div>
+        <div id="mapwrap"><canvas id="map"></canvas></div>
+        <div class="legend"><i class="ok"></i>clean <i class="bad"></i>flagged <i class="pre"></i>would be flagged by the rule you’re previewing</div>
+      </div>
+
+      <div class="grid">
+        <div class="card">
+          <h2>Evidence</h2>
+          <div id="evidence"><p class="hint">Select a cell on the map.</p></div>
+          <canvas id="trace" height="120"></canvas>
+        </div>
+
+        <div class="card">
+          <h2>Add a rule</h2>
+          <div class="row"><input id="ruleText" placeholder="e.g. flag 60 Hz hum above 15%" aria-label="Describe a rule"><button id="ruleGo">Preview</button></div>
+          <div class="row"><button id="teach" class="ghost" disabled>Teach from selection</button><span class="hint" id="teachHint">Drag across the map first.</span></div>
+          <div id="proposal" hidden>
+            <div class="row">
+              <select id="pMetric"></select>
+              <select id="pOp"><option>&gt;</option><option>&lt;</option></select>
+              <input id="pValue" type="number" step="any">
+            </div>
+            <p id="pCount" class="hint"></p>
+            <div class="row"><button id="pAdd">Add to checklist</button><button id="pCancel" class="ghost">Cancel</button></div>
+          </div>
+          <p id="ruleError" class="hint"></p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="row-head"><h2>Checklist</h2>
+          <span><button id="export" class="ghost">Export</button> <label class="ghost btn">Import<input type="file" id="import" accept=".json" hidden></label></span></div>
+        <ul id="checklist"></ul>
+      </div>
+    </section>
+  </main>
+</div>
 <script type="module" src="src/app.js"></script>
 </body>
 </html>
