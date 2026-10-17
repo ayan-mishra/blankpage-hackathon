@@ -10,7 +10,11 @@ import { submitAuth } from './auth.js';
 {
   const $ = (id) => document.getElementById(id);
   const form = $('heroForm'), email = $('heroEmail'), password = $('heroPassword'), status = $('heroStatus');
-  const appPath = (href) => { const u = new URL(href, location.href); return u.pathname + u.search; };
+  // Same-origin path only; a leading "//" would make location.assign leave the site.
+  const appPath = (href) => {
+    const u = new URL(href, location.href);
+    return u.origin === location.origin ? u.pathname.replace(/^\/+/, '/') + u.search : '/app.html';
+  };
   let session = null, busy = false, next = appPath('app.html');
   const say = (message, error = false) => { status.textContent = message; status.classList.toggle('error', error); };
   const render = () => {

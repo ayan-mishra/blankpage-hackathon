@@ -8,6 +8,7 @@ import { makeDemo, demoFile } from './demo.js';
 import { mapLayout, GUT, TOP, ROW, MAP_W } from './map.js';
 import { mountHistory } from './history.js';
 import { TEMPLATES, FIELDS, buildRules, unitText } from './templates.js';
+import { createTour } from './tour.js';
 
 const WIN = 5; // seconds per window
 const $ = (id) => document.getElementById(id);
@@ -40,6 +41,21 @@ function resetBoxes() { // a fresh report: Evidence folded, your rules unfolded
 // ponytail: demo-only starter, keyed off the metric so it tracks DEFAULT_CHECKLIST edits.
 const DEMO_START = DEFAULT_CHECKLIST.filter((r) => r.metric !== 'line60');
 const HUM = { ch: 3, from: 30 }; // C4, from 2:30 (window 30): where the demo's 60 Hz hum lives
+
+// The hum stretch on the map, in viewport px. The canvas may be CSS-scaled, so measure it.
+function humRect() {
+  const c = $('map'), r = c.getBoundingClientRect(), kx = r.width / (c._w || 1), ky = r.height / (c._h || 1);
+  const x0 = GUT + colOf(HUM.from) * c._cw, x1 = GUT + S.cols * c._cw, y0 = TOP + HUM.ch * ROW;
+  return { left: r.left + x0 * kx, right: r.left + x1 * kx, top: r.top + y0 * ky, bottom: r.top + (y0 + ROW) * ky, width: (x1 - x0) * kx, height: ROW * ky };
+}
+// The demo's guided tour. Each step moves on when the visitor does it (tour.reach calls below).
+const tour = createTour([
+  { id: 'map', text: 'Click here — this looks clean, but it isn’t.', sub: 'C4 from 2:30 has 60 Hz electrical hum the starter rules miss.', target: humRect, around: () => $('map') },
+  { id: 'teach', text: 'Press this to teach Somnium what you saw.', sub: 'It suggests a rule from the stretch you picked.', target: () => $('teach'), focus: () => $('teach') },
+  { id: 'add', text: 'Add it to your rules.', sub: 'The preview shows what it would catch.', target: () => $('pAdd'), around: () => $('proposal'), focus: () => $('pAdd'), enter: () => autoOpen('ruleBox', true) },
+  { id: 'done', text: () => (S.change && S.change.from.label !== S.change.to.label ? 'Your rule changed the verdict.' : 'Your rule is in. Check the verdict.'),
+    sub: 'The starter checklist missed that hum. Now it’s caught.', target: () => $('verdictPill'), around: () => $('verdict'), focus: () => $('tourDone'), last: true },
+], { onEnd: () => { $('tourAgain').hidden = !S.demo; if (S.demo) $('tourAgain').focus(); } });
 
 // A drawn column may cover S.step windows (long recordings aggregate; see map.js).
 const colOf = (win) => Math.floor(win / S.step);
@@ -87,8 +103,7 @@ function load(edf, { demo = false, name = '', checklist = null } = {}) {
   // Reopening an analysis restores the exact rules it was saved with.
   if (!demo && Array.isArray(checklist)) S.checklist = checklist.map((r) => ({ ...r }));
   $('proposal').hidden = true; $('ruleError').textContent = '';
-  $('tryIt').hidden = !demo; $('tryDone').hidden = true;
-  ['step1', 'step2', 'step3'].forEach((id) => $(id).classList.remove('done'));
+  tour.stop(true); $('tourAgain').hidden = !demo; // openDemo starts the tour once the page is in place
   $('teach').disabled = true;
   $('loaded').textContent = `${demo ? 'Demo recording' : name} · ${edf.labels.length} channels, ${hhmm(n * WIN)}`;
   $('load').hidden = true;
@@ -262,12 +277,19 @@ function select(a, h) {
   S.cell = null; $('teach').disabled = false;
   $('teachHint').textContent = 'Region selected. Press “Teach a rule from selection”.';
   drawMap(); drawEvidence();
+  if (S.sel.ch0 <= HUM.ch && S.sel.ch1 >= HUM.ch && S.sel.col1 >= colOf(HUM.from)) tour.reach('teach'); // dragged over the hum
 }
 function inspect(h) {
   S.sel = null; S.cell = h; $('teach').disabled = true;
   $('teachHint').textContent = 'Click a square to see why. Drag across several squares to teach a rule.';
-  if (h.ch === HUM.ch && h.win >= HUM.from) $('step1').classList.add('done');
   drawMap(); drawEvidence();
+  // Tour: clicking any hum square is enough. Pre-select the whole hum stretch so step 2 needs no precise drag.
+  if (!tour.at('map') && !tour.at('teach')) return;
+  if (h.ch === HUM.ch && h.win >= HUM.from) {
+    S.sel = { ch0: HUM.ch, ch1: HUM.ch, col0: colOf(HUM.from), col1: S.cols - 1 };
+    $('teach').disabled = false; drawMap();
+    tour.reach('teach');
+  } else if (tour.at('teach')) tour.go('map'); // the selection is gone, so point back at the hum
 }
 let anchor = null;
 $('map').onpointerdown = (e) => { anchor = hit(e); if (anchor) $('map').setPointerCapture(e.pointerId); };
@@ -302,6 +324,7 @@ function showProposal(rule) {
   $('pMetric').value = rule.metric; $('pOp').value = rule.op; $('pValue').value = +(rule.value * unit(rule.metric)).toFixed(2);
   updatePreview();
   $('proposal').scrollIntoView({ block: 'nearest' });
+  tour.reach('add');
 }
 function readProposal() {
   const metric = $('pMetric').value;
@@ -320,7 +343,10 @@ function updatePreview() {
     : el('strong', { className: 'will-change', textContent: `Adding it changes the verdict: ${now.label} → ${next.label}.` }));
   drawMap();
 }
-function clearProposal() { S.rule = null; S.preview = new Set(); $('proposal').hidden = true; $('ruleError').textContent = ''; drawMap(); }
+function clearProposal() {
+  S.rule = null; S.preview = new Set(); $('proposal').hidden = true; $('ruleError').textContent = ''; drawMap();
+  if (tour.at('add')) tour.go(S.sel ? 'teach' : 'map'); // no Add rule button to point at any more
+}
 
 $('pMetric').replaceChildren(...Object.entries(METRICS).map(([k, m]) => el('option', { value: k, textContent: m.label })));
 ['pMetric', 'pOp', 'pValue'].forEach((id) => ($(id).oninput = updatePreview));
@@ -329,7 +355,6 @@ $('ruleForm').onsubmit = (e) => {
   const r = parseRule($('ruleText').value);
   if (!r) { $('ruleError').textContent = 'I couldn’t read that. Try “flag 60 Hz hum above 15%” or “flatline over 30%”.'; return; }
   $('ruleError').textContent = ''; showProposal(r);
-  if (r.metric === 'line60') $('step2').classList.add('done');
 };
 $('teach').onclick = () => {
   autoOpen('ruleBox', true); // the proposal lives in this box
@@ -341,15 +366,14 @@ $('teach').onclick = () => {
   if (!r) { $('ruleError').textContent = 'No single measure sets that region apart from the rest. Try selecting a tighter region.'; $('ruleError').scrollIntoView({ block: 'nearest' }); return; }
   $('ruleError').textContent = 'Suggested from your selection. Check the preview and adjust the threshold if you need to.';
   showProposal(r);
-  $('step2').classList.add('done');
 };
 $('pAdd').onclick = () => {
   const r = S.rule;
   editChecklist(() => S.checklist.push(r), `Your rule “${r.name}”`);
+  tour.reach('done'); // before clearProposal, which would send an open tour back a step
   $('ruleText').value = ''; clearProposal();
   S.sel = null; $('teach').disabled = true; drawMap(); drawEvidence();
   $('teachHint').textContent = 'Click a square to see why. Drag across several squares to teach a rule.';
-  if (!$('tryIt').hidden) { $('step3').classList.add('done'); $('tryDone').hidden = S.change.from.label === S.change.to.label; }
   $('verdict').scrollIntoView({ block: 'nearest' });
 };
 $('pCancel').onclick = clearProposal;
@@ -418,12 +442,13 @@ async function openFile(f) {
 }
 // "+ New analysis": back to the upload view.
 function showUpload() {
-  S.edf = null; S.file = null; S.demo = false;
+  S.edf = null; S.file = null; S.demo = false; tour.stop(true);
   $('report').hidden = true; $('load').hidden = false;
   $('error').textContent = ''; $('file').value = '';
   scrollTo(0, 0);
 }
-function openDemo() { history.setActive(null); load(makeDemo(), { demo: true }); scrollTo(0, 0); }
+function openDemo() { history.setActive(null); load(makeDemo(), { demo: true }); scrollTo(0, 0); tour.start(); $('tourAgain').hidden = true; }
+$('tourAgain').onclick = openDemo; // a fresh demo: the tour needs the starter rules back
 $('file').onchange = (e) => e.target.files[0] && openFile(e.target.files[0]);
 $('drop').ondragover = (e) => { e.preventDefault(); $('drop').classList.add('over'); };
 $('drop').ondragleave = () => $('drop').classList.remove('over');

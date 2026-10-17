@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { mockBackend, login } from './helpers.js';
 
 // The two result boxes are dropdowns: folded/shown by hand, and unfolded by the app when
-// they have something to show. Folded boxes must not swallow the demo's teach-a-rule flow.
+// they have something to show. Folded boxes must not swallow the demo's guided tour.
 test('Evidence and Your rules fold, unfold on demand, and keep a manual fold', async ({ page }) => {
   await mockBackend(page);
   await page.goto('/app.html?demo');
@@ -56,6 +56,16 @@ test('Evidence and Your rules fold, unfold on demand, and keep a manual fold', a
   await expect(rules).toHaveAttribute('open', '');
   await expect(page.locator('#proposal')).toBeVisible();
   await expect(page.locator('#pCount')).toContainText('changes the verdict');
+
+  // The tour now points into Your rules (at Add rule). Folding the box by hand docks the callout
+  // without an arrow rather than pointing at nothing; unfolding brings the arrow back.
+  await expect(page.locator('#tourCount')).toHaveText('3 of 4');
+  await expect(page.locator('#tourArrow')).toBeVisible();
+  await rules.locator('> summary').click();
+  await expect(page.locator('#tourArrow')).toBeHidden();
+  await expect(page.locator('#tour')).toBeVisible();
+  await rules.locator('> summary').click();
+  await expect(page.locator('#tourArrow')).toBeVisible();
 
   // A newly loaded recording goes back to the default: Evidence folded, your rules unfolded.
   await page.getByRole('button', { name: '+ New analysis' }).click();

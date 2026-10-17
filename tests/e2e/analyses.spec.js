@@ -129,7 +129,7 @@ test('the sidebar stays pinned while the report scrolls past', async ({ page }) 
   await page.waitForTimeout(150);
   // The report has scrolled away, but the analyses list is still on screen.
   expect(await page.locator('#mapwrap').evaluate((el) => el.getBoundingClientRect().top)).toBeLessThan(0);
-  expect(await page.locator('#sidebar').evaluate((el) => el.getBoundingClientRect().top)).toBe(0);
+  expect(await page.locator('#sidebar').evaluate((el) => el.getBoundingClientRect().top)).toBeCloseTo(0, 0); // sub-pixel page heights can nudge it by a fraction
   await expect(rows(page)).toBeInViewport();
 });
 
