@@ -130,7 +130,7 @@ noscript p{padding:16px;border:1px solid var(--err);border-radius:8px;background
 .metrics{display:grid;grid-template-columns:1fr auto;gap:2px 12px;margin:12px 0 0;font-size:13px;color:var(--mute)}
 .metrics dd{margin:0;text-align:right;font-variant-numeric:tabular-nums;color:var(--text)}
 
-#ruleBox>.hint{margin-top:0}
+#ruleBox .box-body>.hint{margin-top:0}
 .row-tools{display:flex;gap:6px}.row-tools .small,.row-tools button.small{margin:0}
 .btn.small{padding:5px 10px;font-size:14px}
 .tryit{margin:12px 0;padding:12px 14px;background:var(--tint);border-radius:6px;font-size:15px}
@@ -248,3 +248,15 @@ button.history-remove{flex:none;width:32px;height:32px;padding:0;border:0;font-s
 .tpl-err:empty{display:none}
 #tplCount{margin:8px 0;font-size:15px}
 .tpl-num{white-space:nowrap}
+
+/* ---- collapsible result boxes (Evidence, Your rules) ----
+   The summary carries a one-line state so a collapsed box still says what it holds. */
+.box-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;cursor:pointer;list-style:none}
+.box-head::-webkit-details-marker{display:none}
+.box-head h2{margin:0}
+.box-head .mark{margin-left:auto;color:var(--mute);font-size:13px;line-height:1}
+.box-head .mark::before{content:"▸ "}
+details[open]>.box-head .mark::before{content:"▾ "}
+.box-head:hover h2{text-decoration:underline}
+.summary-meta{color:var(--mute);font-weight:400;font-size:14px}
+details[open]>.box-head{margin-bottom:10px}

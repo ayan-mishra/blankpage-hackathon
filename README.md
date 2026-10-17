@@ -77,10 +77,15 @@ recording itself are stored.
 ### Previous analyses and stored recordings
 
 The sidebar keeps analyses in IndexedDB, so saving, listing and reopening all work
-signed out and offline. On a wide screen it stays pinned as the report scrolls, and
-scrolls internally if the list outgrows the window; on a phone it stacks above the
-report and scrolls normally. A saved analysis records the filename, date, length, channel
-count, sample rate, the checklist it was scored with, and whether a recording is kept.
+signed out and offline. On a wide screen the analyses sidebar sits on the left and stays pinned as the report scrolls; on a phone it opens as a drawer from the top bar. A saved analysis records the filename,
+date, length, channel count, sample rate, the checklist it was scored with, and whether a
+recording is kept.
+
+The Evidence and Your rules boxes are dropdowns: fold either one and it collapses to a
+single summary line that still reports its state (the square you inspected, or how many
+rules apply and how much they flag). Evidence unfolds by itself when you inspect a
+square; teaching a rule always unfolds Your rules, because the preview and its
+**Add rule** button live in there.
 
 Opening one restores the recording **and** the checklist, so the verdict is reproducible
 rather than re-scored against whatever rules are current. The recording is read from this
