@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 import { DEFAULT_CHECKLIST } from '../src/rules.js';
 
@@ -15,7 +15,14 @@ test('migration enforces owner access, least privilege and rule validation in Po
       grant usage on schema auth to authenticated;
       grant execute on function auth.uid() to authenticated;
       insert into auth.users values ('00000000-0000-4000-8000-000000000001'), ('00000000-0000-4000-8000-000000000002');`);
-    await db.exec(await readFile(new URL('../supabase/migrations/20261017144704_private_checklists.sql', import.meta.url), 'utf8'));
+    // Supabase's optional automatic-RLS setup installs this trigger helper.
+    await db.exec(`create function public.rls_auto_enable() returns event_trigger language plpgsql security definer as $$begin return;end;$$;`);
+    for (const name of (await readdir(new URL('../supabase/migrations/', import.meta.url))).sort()) {
+      await db.exec(await readFile(new URL('../supabase/migrations/' + name, import.meta.url), 'utf8'));
+    }
+    for (const role of ['anon', 'authenticated']) {
+      assert.equal((await db.query(`select has_function_privilege($1, 'public.rls_auto_enable()', 'execute') as allowed`,[role])).rows[0].allowed, false);
+    }
     await db.exec(`set role authenticated; set request.jwt.claim.sub = '00000000-0000-4000-8000-000000000001';`);
     const { rows: [row] } = await db.query('insert into public.checklists(name,rules) values ($1,$2) returning id', ['Lab', JSON.stringify(DEFAULT_CHECKLIST)]);
     assert.equal((await db.query('select * from public.checklists')).rows.length, 1);
@@ -36,5 +43,12 @@ test('migration enforces owner access, least privilege and rule validation in Po
     await assert.rejects(db.query("insert into public.checklists(name,rules) values ('anon','[]')"), /permission denied/);
     await db.exec(`set role authenticated; set request.jwt.claim.sub = '00000000-0000-4000-8000-000000000001';`);
     assert.equal((await db.query('delete from public.checklists where id=$1 returning id',[row.id])).rows.length, 1);
+  } finally { await db.close(); }
+});
+
+test('trigger restriction migration also works without the optional trigger', async () => {
+  const db = new PGlite();
+  try {
+    await db.exec(await readFile(new URL('../supabase/migrations/20261017145936_restrict_auto_rls_function.sql', import.meta.url), 'utf8'));
   } finally { await db.close(); }
 });

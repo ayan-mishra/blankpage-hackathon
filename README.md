@@ -17,7 +17,7 @@ Supabase handles accounts and private checklist snapshots.
 
 ```
 npm ci
-cp .env.example .env.local  # fill in the public project URL and publishable key
+cp .env.example .env.local  # optional: override the included public project config
 npm run serve             # http://127.0.0.1:8080
 npm test
 npm run test:e2e           # first run: npx playwright install chromium
@@ -25,16 +25,25 @@ npm run build             # deploy dist/ to a static host
 ```
 
 Node 22.12+ (Node 24 recommended). Click "Try the demo recording" for a synthetic
-file with three known faults. Without Supabase configuration the recording tool,
-demo, and checklist import/export remain available; accounts show a setup message.
+file with three known faults. The app defaults to the Somnium Supabase project below.
+To use another project, override the two public values in `.env.local`. Set both to
+empty strings to disable accounts; the demo and local checklist tools still work.
 
-## Supabase setup
+## Connected Supabase project
 
-1. Create a Supabase project, then apply
-   `supabase/migrations/20261017144704_private_checklists.sql` using the SQL Editor
-   or the Supabase CLI migration workflow. This creates one table with owner-only
+- Organization: somniumqc (Free)
+- Project: Somnium (`czixliadrvvdooktoahe`, US East)
+- [Dashboard](https://supabase.com/dashboard/project/czixliadrvvdooktoahe)
+- The URL and publishable key in `src/supabase.js` are intentionally public.
+  RLS and database grants protect checklist data. There is no privileged key in the app.
+
+## Supabase setup for a different project
+
+1. Create a Supabase project, then apply both files in `supabase/migrations/`
+   in filename order using the SQL Editor or the Supabase CLI migration workflow. This creates one table with owner-only
    SELECT, INSERT and DELETE policies. Saved snapshots are immutable; saving again
-   creates a new snapshot. No public read or update access is granted.
+   creates a new snapshot. No public read or update access is granted. The second
+   migration restricts API access to the optional automatic-RLS trigger helper.
 2. Copy the project URL and **publishable** key from the dashboard into `.env.local`.
    These two values are public browser configuration. Never use a secret or
    service-role key. Vite includes `VITE_` variables in the browser build.
@@ -46,6 +55,7 @@ demo, and checklist import/export remain available; accounts show a setup messag
    is intended for testing. Check current [Supabase email guidance](https://supabase.com/docs/guides/auth/auth-smtp).
 5. Rebuild with the public environment variables on your static host. Both
    `index.html` and `app.html` are build entries; publish the generated `dist/`.
+   `vercel.json` supplies these build/output settings for Vercel previews and deployments.
 
 Create an account, confirm its email, then sign in. Password reset emails return
 to the app and reveal the new-password form. Sessions persist through reloads.
@@ -55,10 +65,29 @@ Only named rule snapshots are stored; there is no recording storage or upload AP
 
 `npm test` executes the migration in an embedded Postgres (PGlite) database and
 checks owner isolation, anonymous denial, grants, and malformed rule rejection.
-Browser tests use mocked Supabase HTTP responses and exercise the actual SDK;
-they do not prove email delivery or hosted-project configuration. Before a real
-release, verify confirmation/reset email delivery and use two accounts to confirm
-checklist isolation on the hosted project.
+Browser tests use mocked Supabase HTTP responses and exercise the actual SDK.
+The connected project also passed real two-account login, checklist isolation,
+validation, owner CRUD, recovery-token/password update, and browser session checks.
+Temporary verification users and their checklists were removed afterward.
+Supabase Security Advisor reported zero errors and zero warnings after both migrations.
+
+To rerun hosted verification against an explicitly chosen project, put its server key
+in a protected local file (never in browser configuration or Git), then run:
+
+```sh
+SUPABASE_SECRET_KEY_FILE=/path/to/protected-key node scripts/verify-backend.mjs
+# Also test the actual browser UI against that backend:
+SUPABASE_SECRET_KEY_FILE=/path/to/protected-key SOMNIUM_APP_URL=http://127.0.0.1:8080/app.html?demo node scripts/verify-backend.mjs
+```
+
+The script creates and removes two synthetic accounts without sending email.
+For another project, also set `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` and
+point the app at that same project. Email confirmation/reset delivery still needs
+SMTP configuration for public users; token validation was tested without email.
+The hosted schema was applied through SQL Editor because the connected MCP is scoped
+to another organization. Before using CLI migrations against this existing project,
+mark the two existing migration versions as applied with `supabase migration repair`
+after verifying the remote schema; do not reapply the table-creation migration.
 
 Rollback: revert the application commit to remove accounts. Keep the database for
 recovery. Dropping `public.checklists` and then `private.valid_checklist_rules(jsonb)`
