@@ -62,3 +62,10 @@ test('every result has a plain-words line', () => {
   assert.equal(analyzeNight(night(60, () => false), 10, DEFAULT_CHECKLIST).simple, 'Everything worked all night.');
   assert.match(analyzeNight(night(60, (i) => i >= 20), 10, DEFAULT_CHECKLIST).simple, /stopped touching the skin.*never came back/);
 });
+
+test('participant message is plain and actionable', async () => {
+  const { message } = await import('../src/wear.js');
+  const r = analyzeNight(night(60, (i) => i >= 20), 10, DEFAULT_CHECKLIST);
+  const m = message(r);
+  assert.match(m, /stopped touching the skin/); assert.match(m, /Please clean your forehead/); assert.doesNotMatch(m, /Ask them/);
+});

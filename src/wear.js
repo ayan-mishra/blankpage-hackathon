@@ -9,6 +9,11 @@ const CAUSE = {
 };
 // Same cut-offs as the 2026 home-sleep study cited on the site: 75% clean = OK, 50-74% = warning, under 50% = fail.
 const CLEAN = 'Clean signal all night.';
+const ASK = {
+  contact: 'Please clean your forehead and put the headband back on snugly before bed.',
+  hum: 'Please move chargers and cables away from the bed and put the headband back on.',
+  loose: 'Please check the strap is snug so it doesn’t shift on the pillow.',
+};
 const SIMPLE = {
   contact: 'The headband stopped touching the skin, so nothing was recorded.',
   hum: 'Electricity nearby drowned out the signal, like static on a radio.',
@@ -57,7 +62,8 @@ export function analyzeNight(by, winSec, checklist, labels = []) {
   if (cause && longest) simple = `${SIMPLE[cause]} ${lostToEnd ? 'It never came back.' : 'It got better afterward.'}`;
   if (weak.length) simple = `${cause && longest ? `${simple} ` : ''}One of the two sensors wasn’t working properly for a while.`;
   const action = status === 'ok' && weak.length ? 'Fine for now. Check that sensor’s contact at the next visit.' : status === 'ok' ? 'Nothing to do.' : (cause ? METRICS[Object.keys(METRICS).find((k) => METRICS[k].cause === cause)].fix : 'Check the headband fit.');
-  return { good, goodPct, status, cause, summary, simple, action, duration: n * winSec };
+  const ask = weak.length && !cause ? 'Please check that both sensors touch your forehead.' : ASK[cause] || 'Please check the headband fit.';
+  return { good, goodPct, status, cause, summary, simple, action, ask, duration: n * winSec };
 }
 
 export const participantOf = (filename) => {
@@ -75,3 +81,6 @@ export function toCsv(rows) {
   const body = rows.map((r) => [r.participant, r.file, r.error ? 'Could not read' : STATUS[r.status], r.error ? '' : Math.round(r.goodPct * 100), r.error ? '' : dur(r.duration), r.error || r.summary, r.error ? 'Re-export the file and try again' : r.action]);
   return [head, ...body].map((l) => l.map(q).join(',')).join('\n');
 }
+
+// A ready-to-send note for the participant, in second person.
+export const message = (r) => `Hi, thanks for taking part. Last night’s headband recording had a problem: ${r.simple} ${r.ask} If you get stuck, reply and we’ll help.`;
