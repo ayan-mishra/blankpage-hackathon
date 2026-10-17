@@ -8,7 +8,7 @@ The quality rules are yours to write, in three ways:
 - Drag across a stretch you think is bad, and Somnium suggests the metric and threshold that set it apart from the rest.
 - Edit the metric, direction and threshold by hand, with a live preview.
 
-You sign in to use the app. Every recording you open is saved to a sidebar of analyses (the demo only if you save it), and reopening one restores the checklist it was scored with. You can also start from a checklist template and type your own numbers. Rules save as a checklist you can share. Parsing and checking always run in the browser. A recording is stored in your private bucket only while "Keep the recording" is ticked. Supabase handles accounts, the private checklist snapshots people choose to save, analysis metadata, and recordings people choose to keep.
+You sign in to use the app. Every recording you open is saved to a sidebar of analyses (the demo only if you save it), and reopening one restores the checklist it was scored with. You can also start from a checklist template and type your own numbers. Rules save as a checklist you can share. Recordings are stored in your private Supabase bucket while "Keep the recording" is ticked. Supabase handles accounts, the private checklist snapshots people choose to save, analysis metadata, and recordings people choose to keep.
 
 ## Who it's for
 

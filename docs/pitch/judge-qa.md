@@ -47,7 +47,7 @@ The single-recording page assumes no EEG background: every result has an "In pla
 ## Biotech manufacturing consultant
 
 **What's the data path? Where does patient data go?**
-EDF files are read in the browser with the File API and never leave the machine. There's no upload endpoint. EDF headers can carry patient identifiers, and those stay local too. The only thing that reaches a server is what a signed-in user chooses to save: a checklist name and its rules, stored in Supabase under owner-only row-level security. Saved snapshots can't be edited, only created or deleted.
+You need an account to use the app. Each analysis, its checklist, and (if "Keep the recording" is on) the EDF itself are stored in Supabase: rows under owner-only row-level security, recordings in a private bucket where each user can only reach their own folder. EDF headers can carry patient identifiers, so for real patient data we'd add de-identification on upload and a data agreement; that's on the roadmap. Saved snapshots can't be edited, only created or deleted.
 
 **Regulatory path?**
 Today it's a research tool and we keep it that way: no diagnosis, no treatment decisions, recordings stay local. If a sponsor wanted it inside a regulated trial workflow, we'd need things we don't have yet: an audit trail of which checklist version graded which file, documented validation, and change control. The immutable checklist snapshots are a start on the first. We'd get proper regulatory advice before making any clinical claim.

@@ -28,7 +28,7 @@ The numbers below came from running the demo files through the real code and cli
 ### 1:00–2:45 · Demo 1: one recording (`app.html`)
 
 1. Click **Try the demo recording** (or open `app.html?demo`).
-   > This is a made-up recording, but it's built to look like real EEG: background activity, alpha rhythm that drops when the eyes open, blinks. Five minutes, six channels, three faults we planted. It's read in the browser. Nothing is uploaded.
+   > This is a made-up recording, but it's built to look like real EEG: background activity, alpha rhythm that drops when the eyes open, blinks. Five minutes, six channels, three faults we planted.
 2. Point at the verdict: **This recording is usable**. "Your 5 rules flag 6% of the recording."
    > It starts with a checklist from a lab on 50 Hz power, the European standard. So it has no rule for 60 Hz hum.
 3. On the map, click a red square in the **C3** row around 1:30.
@@ -83,7 +83,7 @@ Switch to `trailer.html` and play it (one minute, sound on), then talk over the 
 Screen-record at 1080p with the cursor visible. Voice-over, no face cam needed.
 
 **0:00–0:15** · Landing page first screen: "Can you trust this night of sleep?", slow scroll.
-> One home sleep recording in four comes back partly bad or dead. A 2026 study of 100 home headband recordings found exactly that. Somnium checks them in your browser before you analyze anything.
+> One home sleep recording in four comes back partly bad or dead. A 2026 study of 100 home headband recordings found exactly that. Somnium checks them before you analyze anything.
 
 **0:15–0:55** · `app.html?demo`.
 - Click a red C3 square.
@@ -97,7 +97,7 @@ Screen-record at 1080p with the cursor visible. Voice-over, no face cam needed.
 - Show **Using your checklist**, then click **Try a sample study**. Hold on the heading.
 > For a study coordinator, the same rules grade every night at once. Four of eight participants need a follow-up.
 - Click the **P04** button, then **Copy full message**.
-> Here's what went wrong, what to do, and a message for the participant, already written. Nothing is uploaded. It runs on your laptop.
+> Here's what went wrong, what to do, and a message for the participant, already written.
 
 **1:35–2:00** · Back to the checklist file, or the roadmap slide.
 > Tools like autoreject and EEGLAB are for people who code. Somnium is for the person who knows what a bad night looks like and wants their own checker. Next: validation against PyPREP and YASA, shared checklist links, and a pilot with real home sleep studies.
