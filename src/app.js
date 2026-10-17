@@ -1,3 +1,4 @@
+import './gpu.js';
 import { parseEDF } from './edf.js';
 import { windowMetrics } from './metrics.js';
 import { METRICS, DEFAULT_CHECKLIST, evaluate, verdict, explain, fmt, parseRule, proposeRule } from './rules.js';
@@ -30,7 +31,8 @@ function refresh() {
 }
 
 function drawMap() {
-  const c = $('map'), n = S.by[0].length, cw = Math.max(10, Math.floor(920 / n));
+  const c = $('map'), n = S.by[0].length;
+  const cw = Math.max(6, Math.min(16, Math.floor(($('mapwrap').clientWidth - GUT) / n))); // fit the container; scroll if tighter than 6px
   const w = GUT + n * cw, h = TOP + S.by.length * ROW, d = devicePixelRatio || 1;
   c.width = w * d; c.height = h * d; c.style.width = w + 'px'; c.style.height = h + 'px';
   const g = c.getContext('2d'); g.scale(d, d);
@@ -63,9 +65,9 @@ function drawEvidence() {
   box.replaceChildren(...lines.map((l) => Object.assign(document.createElement('p'), { textContent: l })));
   const fs = S.edf.rates[ch], x = S.edf.signals[ch].subarray(win * WIN * fs, (win + 1) * WIN * fs);
   const c = $('trace'); c.width = c.clientWidth * (devicePixelRatio || 1);
-  const g = c.getContext('2d'), mx = Math.max(...x.map(Math.abs), 1);
+  const g = c.getContext('2d'), mean = x.reduce((a, b) => a + b, 0) / x.length, mx = Math.max(...x.map((v) => Math.abs(v - mean)), 1);
   g.strokeStyle = getComputedStyle(document.body).getPropertyValue('--accent'); g.lineWidth = 1.5; g.beginPath();
-  x.forEach((v, i) => { const px = (i / (x.length - 1)) * c.width, py = c.height / 2 - (v / mx) * (c.height / 2 - 6); i ? g.lineTo(px, py) : g.moveTo(px, py); });
+  x.forEach((v, i) => { const px = (i / (x.length - 1)) * c.width, py = c.height / 2 - ((v - mean) / mx) * (c.height / 2 - 6); i ? g.lineTo(px, py) : g.moveTo(px, py); });
   g.stroke();
 }
 
@@ -117,7 +119,7 @@ function updatePreview() {
   S.rule = readProposal();
   const f = evaluate([S.rule], S.by);
   S.preview = new Set(f.map((x) => `${x.ch}:${x.win}`));
-  $('pCount').textContent = `Would flag ${f.length} channel-windows (${new Set(f.map((x) => x.ch)).size} channels).`;
+  $('pCount').textContent = `Would flag ${f.length} channel-windows (${new Set(f.map((x) => x.ch)).size === 1 ? '1 channel' : new Set(f.map((x) => x.ch)).size + ' channels'}).`;
   drawMap();
 }
 function clearProposal() { S.rule = null; S.preview = new Set(); $('proposal').hidden = true; $('ruleError').textContent = ''; drawMap(); }
@@ -165,3 +167,4 @@ $('drop').ondragleave = () => $('drop').classList.remove('over');
 $('drop').ondrop = (e) => { e.preventDefault(); $('drop').classList.remove('over'); e.dataTransfer.files[0] && openFile(e.dataTransfer.files[0]); };
 $('demo').onclick = () => load(makeDemo());
 if (new URLSearchParams(location.search).has('demo')) load(makeDemo());
+addEventListener('resize', () => S.edf && drawMap());
