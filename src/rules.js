@@ -1,10 +1,15 @@
 // Rules are plain data over a fixed set of documented metrics, never generated code.
 export const METRICS = {
-  flat: { label: 'flatline fraction', pct: true, why: 'a long run of identical samples usually means the electrode lost contact' },
-  ptp: { label: 'peak-to-peak amplitude (µV)', why: 'very large swings usually come from movement or a loose electrode' },
-  kurtosis: { label: 'spikiness (kurtosis)', why: 'isolated spikes usually come from movement, blinks or electrode pops' },
-  line50: { label: '50 Hz mains share of power', pct: true, why: 'mains hum means poor shielding or high electrode impedance' },
-  line60: { label: '60 Hz mains share of power', pct: true, why: 'mains hum means poor shielding or high electrode impedance' },
+  flat: { label: 'Signal stopped (flat line)', pct: true, cause: 'contact', why: 'The headband probably lost contact with the skin',
+    fix: 'Ask them to clean their forehead and put the headband back on snugly before bed' },
+  ptp: { label: 'Big swings in the signal (µV)', cause: 'loose', why: 'Usually movement, or a loose headband',
+    fix: 'Check the strap is snug and not shifting on the pillow' },
+  kurtosis: { label: 'Sudden spikes', cause: 'loose', why: 'Usually a bump, or the headband shifting',
+    fix: 'Check the strap is snug and not shifting on the pillow' },
+  line50: { label: '50 Hz electrical hum', pct: true, cause: 'hum', why: 'Interference from mains power, or a poor connection',
+    fix: 'Move chargers and cables away from the bed and re-seat the headband' },
+  line60: { label: '60 Hz electrical hum', pct: true, cause: 'hum', why: 'Interference from mains power, or a poor connection',
+    fix: 'Move chargers and cables away from the bed and re-seat the headband' },
 };
 const OPS = { '>': (a, b) => a > b, '<': (a, b) => a < b };
 

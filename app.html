@@ -15,7 +15,8 @@
 <noscript><p>Somnium needs JavaScript to read recordings in your browser.</p></noscript>
 <header>
   <h1><a href="./">Somnium</a></h1>
-  <p class="tag">Describe your standard. See what passes.</p>
+  <nav class="tabs"><a href="app.html" aria-current="page">Check one recording</a><a href="study.html">Check a study</a></nav>
+  <p class="tag">Check an EEG recording you’ve collected. No experience needed: every result comes with a plain-English reason.</p>
 </header>
 <main>
   <section id="load" class="card">
@@ -67,6 +68,18 @@
       <ul id="checklist"></ul>
     </div>
   </section>
+  <details class="card glossary">
+    <summary>What do these words mean?</summary>
+    <dl>
+      <dt>EEG</dt><dd>A recording of electrical activity from the brain, taken with sensors on the head.</dd>
+      <dt>Channel</dt><dd>One sensor’s signal. Each row on the map is one channel.</dd>
+      <dt>Window</dt><dd>A short slice of time (5 seconds here). Each square on the map is one channel in one window.</dd>
+      <dt>Lost contact / flat line</dt><dd>The sensor stopped touching the skin, so the signal went dead flat.</dd>
+      <dt>Electrical hum</dt><dd>Interference from mains power or a bad connection. It looks like a thick, fuzzy band instead of a line.</dd>
+      <dt>Spikes and swings</dt><dd>Sudden jumps, usually from movement or a loose headband.</dd>
+      <dt>Rule</dt><dd>A condition you set, like “flag any window where the signal goes flat for more than half of it”.</dd>
+    </dl>
+  </details>
 </main>
 <script type="module" src="src/app.js"></script>
 </body>
