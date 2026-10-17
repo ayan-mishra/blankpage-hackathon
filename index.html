@@ -33,42 +33,42 @@
 </header>
 
 <div class="story" id="how">
-  <div class="steps">
-    <section class="step" data-step="1">
+  <section class="step" data-step="1">
+    <div class="copy">
       <h2>Forty recordings. Nobody told you which ones are usable.</h2>
       <p>Home headbands lose contact, pick up mains hum and drop out. In a 2026 preprint of 100 home recordings, about one in four was degraded or lost entirely.</p>
       <p>You usually find out after the analysis, or never. <a href="https://www.medrxiv.org/content/10.64898/2026.06.01.26354591v1.full.pdf">Source: medRxiv preprint</a></p>
-    </section>
-    <section class="step" data-step="2">
+    </div>
+    <figure class="stage" data-step="1" aria-hidden="true"><svg class="chart" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet"></svg></figure>
+  </section>
+  <section class="step" data-step="2">
+    <div class="copy">
       <h2>Drop in the file. It’s read right here, in your browser.</h2>
       <p>Somnium scans every channel in five-second windows and marks what looks wrong. Nothing is uploaded.</p>
-    </section>
-    <section class="step" data-step="3">
+    </div>
+    <figure class="stage" data-step="2" aria-hidden="true"><svg class="chart" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet"></svg></figure>
+  </section>
+  <section class="step" data-step="3">
+    <div class="copy">
       <h2>Every mark comes with its reason.</h2>
       <p>Click a mark to see the measurement, the rule that tripped, and what usually causes it. You can check the reasoning instead of trusting a score.</p>
-    </section>
-    <section class="step" data-step="4">
+    </div>
+    <figure class="stage" data-step="3" aria-hidden="true"><svg class="chart" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet"></svg><div class="callout" id="callout"></div></figure>
+  </section>
+  <section class="step" data-step="4">
+    <div class="copy">
       <h2>Your lab’s standard, written your way.</h2>
       <p>Type a rule in plain words. Or drag across a stretch you know is bad and let Somnium propose the threshold. Or tune the numbers yourself. Each rule shows what it would flag before you add it.</p>
-    </section>
-    <section class="step" data-step="5">
+    </div>
+    <figure class="stage" data-step="4" aria-hidden="true"><svg class="chart" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet"></svg><div class="composer"><p><b>Say it</b> <span id="sayText"></span></p><p><b>Show it</b> drag across the spikes, get <i>spikiness above 39</i></p><p><b>Tune it</b> change the number, watch the marks</p></div></figure>
+  </section>
+  <section class="step" data-step="5">
+    <div class="copy">
       <h2>A verdict you can defend. A checklist you can share.</h2>
       <p>Save your rules as a file, run the same standard on the next recording, or hand it to the next student.</p>
-    </section>
-  </div>
-
-  <div class="stagewrap">
-    <div class="stage" id="stage" data-step="0" aria-hidden="true">
-      <svg id="chart" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet"></svg>
-      <div class="callout" id="callout"></div>
-      <div class="composer" id="composer">
-        <p><b>Say it</b> <span id="sayText"></span></p>
-        <p><b>Show it</b> drag across the spikes, get <i>spikiness above 39</i></p>
-        <p><b>Tune it</b> change the number, watch the marks</p>
-      </div>
-      <div class="stamp" id="stamp"><strong></strong><span></span><code>somnium-checklist.json</code></div>
     </div>
-  </div>
+    <figure class="stage" data-step="5" aria-hidden="true"><svg class="chart" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet"></svg><div class="stamp" id="stamp"><strong></strong><span></span><code>somnium-checklist.json</code></div></figure>
+  </section>
 </div>
 
 <section class="finale">

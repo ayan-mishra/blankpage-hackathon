@@ -4,7 +4,7 @@ const SINES = [[1.3, 14], [4.1, 11], [9.3, 16], [17, 6], [23, 5], [37.7, 3.5], [
 const eeg = (t, seed) => SINES.reduce((a, [f, m], i) => a + m * Math.sin(2 * Math.PI * f * t + seed * (i + 1.7)), 0);
 const CYCLE = 9;
 
-export function stripChart(canvas, { rows = 3, speed = 90, labels = ['F3', 'C3', 'O1'], ink = '#191a33', flag = '#f2a900', amp = 0.9 } = {}) {
+export function stripChart(canvas, { rows = 3, speed = 90, labels = ['F3', 'C3', 'O1'], ink = '#191a33', flag = '#f2a900', paper = '#fbf1ef', amp = 0.9 } = {}) {
   const g = canvas.getContext('2d');
   const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
   let w = 0, h = 0, raf = 0, visible = true;
@@ -26,6 +26,7 @@ export function stripChart(canvas, { rows = 3, speed = 90, labels = ['F3', 'C3',
     for (let r = 0; r < rows; r++) {
       const cy = r * rh + rh / 2;
       let run = null;
+      const marks = [];
       g.beginPath();
       for (let x = 56; x <= w; x += 0.7) {
         const t = now - (w - x) / speed, f = fault(t, r);
@@ -35,9 +36,12 @@ export function stripChart(canvas, { rows = 3, speed = 90, labels = ['F3', 'C3',
         const y = cy - Math.max(-rh * 0.46, Math.min(rh * 0.46, v * amp * (rh / 100)));
         x === 56 ? g.moveTo(x, y) : g.lineTo(x, y);
         if (f && !run) run = { f, x0: x };
-        if (run && (!f || x + 0.7 > w)) { mark(run, x, r, rh); run = null; }
+        if (run && (!f || x + 0.7 > w)) { marks.push({ ...run, x1: x }); run = null; }
       }
+      // bands under the trace, trace, then labels on top so no line ever crosses the text
+      marks.forEach((m) => { g.save(); g.globalAlpha = 0.45; g.fillStyle = flag; g.fillRect(m.x0, r * rh + 6, m.x1 - m.x0, rh - 12); g.restore(); });
       g.strokeStyle = ink; g.lineWidth = 1.4; g.lineJoin = 'round'; g.stroke();
+      marks.forEach((m) => label(m, r, rh));
       g.fillStyle = ink; g.font = '500 14px "Bricolage Grotesque", sans-serif'; g.textBaseline = 'middle';
       g.fillText(labels[r] || '', 12, cy);
       // the pen
@@ -45,11 +49,13 @@ export function stripChart(canvas, { rows = 3, speed = 90, labels = ['F3', 'C3',
       g.beginPath(); g.arc(w - 3, py, 4, 0, 7); g.fillStyle = flag; g.fill(); g.lineWidth = 2; g.strokeStyle = ink; g.stroke();
     }
   }
-  function mark(run, x1, r, rh) {
-    g.save(); g.globalAlpha = 0.45; g.fillStyle = flag;
-    g.fillRect(run.x0, r * rh + 6, x1 - run.x0, rh - 12); g.restore();
-    g.fillStyle = ink; g.font = '800 14px "Bricolage Grotesque", sans-serif';
-    g.fillText(run.f === 'flat' ? 'flatline' : '60 Hz hum', Math.max(run.x0 + 6, 60), r * rh + 20);
+  function label(m, r, rh) {
+    const text = m.f === 'flat' ? 'flatline' : '60 Hz hum', x = Math.max(m.x0 + 6, 60), y = r * rh + 10;
+    g.font = '800 14px "Bricolage Grotesque", sans-serif'; g.textBaseline = 'middle';
+    const tw = g.measureText(text).width;
+    g.fillStyle = paper; g.fillRect(x - 5, y - 4, tw + 10, 20);
+    g.strokeStyle = ink; g.lineWidth = 1.5; g.strokeRect(x - 5, y - 4, tw + 10, 20);
+    g.fillStyle = ink; g.fillText(text, x, y + 6);
   }
   const loop = (ms) => { if (visible) draw(ms / 1000); raf = requestAnimationFrame(loop); };
   size(); addEventListener('resize', () => { size(); if (still) draw(CYCLE * 3 + 4); });
