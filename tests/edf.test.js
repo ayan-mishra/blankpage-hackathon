@@ -24,3 +24,13 @@ test('parses labels, rates, samples; skips EDF Annotations', () => {
 test('rejects non-EDF input', () => {
   assert.throws(() => parseEDF(new ArrayBuffer(100)));
 });
+
+test('rejects hostile headers before allocating', () => {
+  const good = new Uint8Array(makeEdf([{ label: 'A', fs: 10, data: new Float32Array(20) }], 2));
+  const patch = (off, len, text) => { const b = good.slice(); b.set(Array.from(text.padEnd(len)).map((c) => c.charCodeAt(0)), off); return b.buffer; };
+  assert.throws(() => parseEDF(patch(236, 8, '999999999')), /too short/); // huge record count
+  assert.throws(() => parseEDF(patch(236, 8, '0')), /record count/);
+  assert.throws(() => parseEDF(patch(244, 8, '0')), /duration/);
+  const sprOff = 256 + 1 * (16 + 80 + 8 * 5 + 80); // samples-per-record field of signal 0
+  assert.throws(() => parseEDF(patch(sprOff, 8, '0')), /samples per record/);
+});

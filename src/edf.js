@@ -27,12 +27,22 @@ export function parseEDF(arrayBuffer) {
   const numRecords = Number(text(236, 8));
   const recordDuration = Number(text(244, 8));
   const headerBytes = Number(text(184, 8)) || sigStart + ns * 256;
+  if (!Number.isInteger(numRecords) || numRecords < 1) throw new Error('EDF: invalid record count');
+  if (!(recordDuration > 0) || !Number.isFinite(recordDuration)) throw new Error('EDF: invalid record duration');
+  if (!Number.isInteger(headerBytes) || headerBytes < sigStart + ns * 256) throw new Error('EDF: invalid header size');
+  // Validate every size before allocating anything, so a hostile header can't exhaust memory.
+  const sprs = Array.from({ length: ns }, (_, i) => Number(at(i, 8)));
+  if (!sprs.every((n) => Number.isInteger(n) && n > 0)) throw new Error('EDF: invalid samples per record');
+  const recordLen = sprs.reduce((a, b) => a + b, 0) * 2;
+  if (arrayBuffer.byteLength < headerBytes + numRecords * recordLen) {
+    throw new Error('EDF: buffer is too short for the declared data records');
+  }
   const labels = [];
   const rates = [];
   const signals = [];
   const plan = []; // per signal (incl. annotations): samples/record + decode state
   for (let i = 0; i < ns; i++) {
-    const spr = Number(at(i, 8));
+    const spr = sprs[i];
     const label = at(i, 0);
     if (label.startsWith('EDF Annotations')) {
       plan.push({ spr }); // parsed for length, omitted from output
@@ -48,10 +58,6 @@ export function parseEDF(arrayBuffer) {
     labels.push(label);
     rates.push(spr / recordDuration);
     signals.push(out);
-  }
-  const recordLen = plan.reduce((a, s) => a + s.spr, 0) * 2;
-  if (arrayBuffer.byteLength < headerBytes + numRecords * recordLen) {
-    throw new Error('EDF: buffer is too short for the declared data records');
   }
   const view = new DataView(arrayBuffer);
   let off = headerBytes;
