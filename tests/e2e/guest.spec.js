@@ -36,7 +36,7 @@ test('landing guest button remembers the demo destination and opens the study to
   await page.getByRole('button', { name: 'Continue as guest', exact: true }).click();
   await expect(page).toHaveURL(/study\.html\?sample$/);
   await expect(page.locator('#progress')).toHaveText('Checked 8 recordings.');
-  await page.getByRole('link', { name: 'Check one recording', exact: true }).click();
+  await page.getByRole('link', { name: 'Check one recording →', exact: true }).click();
   await expect(page.locator('#appShell')).toBeVisible();
   await expect(page.locator('#accountEmail')).toHaveText('Guest · this browser');
 });

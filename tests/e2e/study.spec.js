@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { mockBackend, login, session, user, edfFile } from './helpers.js';
+import { mockBackend, login, session, user, edfFile, openAccount } from './helpers.js';
 
 async function loginAsSecondUser(page) {
   const next = { ...user, id: '00000000-0000-4000-8000-000000000002', email: 'second@example.com' };
@@ -19,6 +19,7 @@ test('switching accounts clears study rows and cannot regrade the previous files
   await login(page);
   await expect(page.locator('#progress')).toHaveText('Checked 8 recordings.');
   await expect(page.locator('#table tbody tr:not(.group)')).toHaveCount(8);
+  await openAccount(page);
   await page.locator('#signOut').click();
   await expect(page.locator('#authForm')).toBeVisible();
   await loginAsSecondUser(page);
@@ -48,6 +49,7 @@ test('an EDF read finishing after logout cannot repopulate the next account’s 
   });
   await page.locator('#files').setInputFiles(file);
   await expect.poll(() => page.evaluate(() => window.studyReadStarted)).toBe(true);
+  await openAccount(page);
   await page.locator('#signOut').click();
   await expect(page.locator('#authForm')).toBeVisible();
   await loginAsSecondUser(page);

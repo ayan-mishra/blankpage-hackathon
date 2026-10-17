@@ -11,7 +11,7 @@ import { supabase } from './supabase.js';
 const WIN = 10; // seconds per window
 const $ = (id) => document.getElementById(id);
 const ORDER = { error: -1, bad: 0, check: 1, ok: 2 };
-let rows = [], last = null;
+let rows = [], last = null, lastLabel = '';
 let runGeneration = 0;
 let checklist = readSaved(); // null = built-in default; else the one built in app.html or imported here
 
@@ -69,8 +69,7 @@ function jumpTo(participant) {
   tr.focus({ preventScroll: true });
 }
 
-function summary() {
-  const people = byParticipant(rows);
+function summary(people) {
   const todo = people.filter((p) => p.flagged);
   const multi = people.some((p) => p.nights > 1);
   const nights = multi ? ` (${rows.filter(needsFollowUp).length} of ${plural(rows.length, 'night')})` : '';
@@ -90,15 +89,30 @@ function summary() {
   ];
 }
 
+// The rail lists who needs a follow-up and jumps to their row, like the analyses list does for recordings.
+function drawPeople(people) {
+  const todo = people.filter((p) => p.flagged);
+  $('people').hidden = !todo.length;
+  $('peopleList').replaceChildren(...todo.map((p) => el('li', {}, el('button', {
+    type: 'button',
+    ariaLabel: `${p.participant}: show their row`,
+    onclick: () => { setDrawer(false); jumpTo(p.participant); },
+  }, el('b', { textContent: p.participant }),
+    el('span', { className: 'hint', textContent: p.nights > 1 ? `problem on ${p.flagged} of ${p.nights} nights` : p.worst.error ? 'Could not read' : `${Math.round(p.worst.goodPct * 100)}% clean` })))));
+}
+
 function render() {
   $('results').hidden = !rows.length;
+  $('load').hidden = !!rows.length;
+  const people = rows.length ? byParticipant(rows) : [];
+  drawPeople(people);
   if (!rows.length) {
     $('summary').replaceChildren();
     document.querySelector('#table tbody').replaceChildren();
     $('onlyBadCount').textContent = '';
     return;
   }
-  $('summary').replaceChildren(...summary());
+  $('summary').replaceChildren(...summary(people));
   $('onlyBadCount').textContent = `(${rows.filter(needsFollowUp).length})`;
   const shown = [...rows].sort((a, b) => ORDER[kindOf(a)] - ORDER[kindOf(b)] || a.participant.localeCompare(b.participant, undefined, { numeric: true }))
     .filter((r) => !$('onlyBad').checked || needsFollowUp(r));
@@ -127,9 +141,10 @@ function render() {
   document.querySelector('#table tbody').replaceChildren(...out);
 }
 
-async function run(items) {
+async function run(items, label = '') {
   const gen = ++runGeneration;
-  rows = []; last = items;
+  rows = []; last = items; lastLabel = label;
+  $('studyTitle').textContent = `${label ? `${label} · ` : ''}${plural(items.length, 'recording')}`;
   render();
   for (let i = 0; i < items.length; i++) {
     const { name, load } = items[i];
@@ -157,7 +172,22 @@ $('files').onchange = (e) => e.target.files.length && fromFiles(e.target.files);
 $('drop').ondragover = (e) => { e.preventDefault(); $('drop').classList.add('over'); };
 $('drop').ondragleave = () => $('drop').classList.remove('over');
 $('drop').ondrop = (e) => { e.preventDefault(); $('drop').classList.remove('over'); e.dataTransfer.files.length && fromFiles(e.dataTransfer.files); };
-$('sample').onclick = () => run(makeStudy().map(({ name, edf }) => ({ name, load: async () => edf })));
+$('sample').onclick = () => run(makeStudy().map(({ name, edf }) => ({ name, load: async () => edf })), 'Sample study');
+// ---- sidebar: the same drawer behaviour as app.html's analyses rail
+const sidebar = $('sidebar'), toggle = $('sideToggle');
+const setDrawer = (open) => { sidebar.classList.toggle('open', open); toggle.setAttribute('aria-expanded', String(open)); };
+toggle.onclick = () => setDrawer(!sidebar.classList.contains('open'));
+
+// "+ New study": drop the results and go back to the drop zone.
+function showUpload() {
+  runGeneration++;
+  rows = []; last = null; lastLabel = '';
+  $('studyTitle').textContent = ''; $('progress').textContent = '';
+  $('files').value = ''; $('bar').hidden = true; $('bar').value = 0;
+  render(); scrollTo(0, 0);
+}
+$('newStudy').onclick = () => { setDrawer(false); showUpload(); };
+
 $('onlyBad').onchange = render;
 $('csv').onclick = () => {
   const a = Object.assign(document.createElement('a'), { download: 'somnium-wear-check.csv', href: URL.createObjectURL(new Blob([toCsv(rows)], { type: 'text/csv' })) });
@@ -172,7 +202,7 @@ function drawRules(note = '') {
 }
 function setChecklist(rules, note) {
   checklist = rules; writeSaved(rules); drawRules(note);
-  if (last) run(last); // regrade what's on screen with the new rules
+  if (last) run(last, lastLabel); // regrade what's on screen with the new rules
 }
 $('importRules').onchange = async (e) => {
   try { setChecklist(normalizeRules(JSON.parse(await e.target.files[0].text()).rules), 'Checklist imported.'); }
@@ -180,16 +210,13 @@ $('importRules').onchange = async (e) => {
   e.target.value = '';
 };
 // another tab (app.html) changed the checklist
-addEventListener('storage', (e) => { if (e.key === null || e.key === SAVED_KEY) { checklist = readSaved(); drawRules('Your checklist changed in another tab.'); if (last) run(last); } });
+addEventListener('storage', (e) => { if (e.key === null || e.key === SAVED_KEY) { checklist = readSaved(); drawRules('Your checklist changed in another tab.'); if (last) run(last, lastLabel); } });
 drawRules();
 // Gated like app.html; ?sample (kept through sign-in) runs the sample study.
 mountAccount(supabase, {
   onSignedIn: (intent) => { if (intent.has('sample')) $('sample').click(); },
   onSignedOut: () => {
-    runGeneration++;
-    rows = []; last = null;
-    $('files').value = ''; $('onlyBad').checked = false;
-    $('bar').hidden = true; $('progress').textContent = '';
-    render();
+    $('onlyBad').checked = false;
+    setDrawer(false); showUpload();
   },
 });
