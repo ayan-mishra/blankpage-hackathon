@@ -1,13 +1,16 @@
 import { test, expect } from '@playwright/test';
+import { mockBackend, login } from './helpers.js';
 
 test.beforeEach(async ({ page }) => {
-  await page.route('https://somnium-test.supabase.co/**', (r) => r.abort());
+  await mockBackend(page);
   // headless Chromium renders in software, so study.html shows its hardware-acceleration notice
   await page.addLocatorHandler(page.getByRole('button', { name: 'Continue anyway' }), (b) => b.click());
 });
 
 test('a rule added in app.html grades the sample study, and reset goes back to the default', async ({ page }) => {
   await page.goto('/study.html?sample');
+  await expect(page.locator('#appShell')).toBeHidden(); // gated until sign-in
+  await login(page); // ?sample still runs after signing in
   await expect(page.locator('#rulesUsed')).toContainText('Using the default checklist (6 rules)');
   await expect(page.locator('#progress')).toContainText('Checked');
   const before = await page.locator('#summary h2').textContent();
@@ -33,6 +36,7 @@ test('a rule added in app.html grades the sample study, and reset goes back to t
 
 test('the untouched demo starter does not become the study checklist', async ({ page }) => {
   await page.goto('/app.html?demo');
+  await login(page);
   await expect(page.locator('#checklist li')).toHaveCount(5);
   await page.goto('/study.html');
   await expect(page.locator('#rulesUsed')).toContainText('Using the default checklist');
@@ -40,6 +44,7 @@ test('the untouched demo starter does not become the study checklist', async ({ 
 
 test('study imports a checklist file and rejects a bad one', async ({ page }) => {
   await page.goto('/study.html');
+  await login(page);
   const rules = [{ id: 'flat', name: 'Flatline', metric: 'flat', op: '>', value: 0.5 }];
   await page.locator('#importRules').setInputFiles({ name: 'c.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ rules })) });
   await expect(page.locator('#rulesUsed')).toContainText('Using your checklist: 1 rule');

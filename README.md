@@ -8,7 +8,7 @@ The quality rules are yours to write, in three ways:
 - Drag across a stretch you think is bad, and Somnium suggests the metric and threshold that set it apart from the rest.
 - Edit the metric, direction and threshold by hand, with a live preview.
 
-Rules save as a checklist you can share. You can also save an analysis and reopen it later, with the checklist it was scored with. Parsing and checking always run in the browser. A recording is only uploaded if you tick "Keep the recording" and are signed in; otherwise it stays on your computer. Supabase handles accounts, the private checklist snapshots people choose to save, analysis metadata, and recordings people choose to keep.
+You sign in to use the app. Every recording you open is saved to a sidebar of analyses (the demo only if you save it), and reopening one restores the checklist it was scored with. You can also start from a checklist template and type your own numbers. Rules save as a checklist you can share. Recordings are stored in your private Supabase bucket while "Keep the recording" is ticked. Supabase handles accounts, the private checklist snapshots people choose to save, analysis metadata, and recordings people choose to keep.
 
 ## Who it's for
 
@@ -31,7 +31,7 @@ Node 22.12+ (Node 24 recommended). Click "Try the demo recording" (or open `app.
 for a synthetic file with three known faults; the "Try it" box walks you through
 teaching it a 60 Hz rule. `study.html?sample` opens the sample study. The app defaults to the Somnium Supabase project below.
 To use another project, override the two public values in `.env.local`. Set both to
-empty strings to disable accounts; the demo and local checklist tools still work.
+empty strings to disable accounts; the app pages then show a "not configured" message instead of opening.
 
 ## Connected Supabase project
 
@@ -77,9 +77,7 @@ recording itself are stored.
 ### Previous analyses and stored recordings
 
 The sidebar keeps analyses in IndexedDB, so saving, listing and reopening all work
-signed out and offline. On a wide screen it is a rail beside the report: it stays pinned
-as the report scrolls, and scrolls internally if the list outgrows the window. On a phone
-it stacks below the report and scrolls normally. A saved analysis records the filename,
+signed out and offline. On a wide screen the analyses sidebar sits on the left and stays pinned as the report scrolls; on a phone it opens as a drawer from the top bar. A saved analysis records the filename,
 date, length, channel count, sample rate, the checklist it was scored with, and whether a
 recording is kept.
 

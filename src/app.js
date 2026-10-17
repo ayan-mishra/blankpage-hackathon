@@ -7,6 +7,8 @@ import { METRICS, DEFAULT_CHECKLIST, evaluate, verdict, fmt, parseRule, proposeR
 import { makeDemo, demoFile } from './demo.js';
 import { mapLayout, GUT, TOP, ROW, MAP_W } from './map.js';
 import { mountHistory } from './history.js';
+import { TEMPLATES, FIELDS, buildRules, unitText } from './templates.js';
+import { createTour } from './tour.js';
 
 const WIN = 5; // seconds per window
 const $ = (id) => document.getElementById(id);
@@ -39,6 +41,21 @@ function resetBoxes() { // a fresh report: Evidence folded, your rules unfolded
 // ponytail: demo-only starter, keyed off the metric so it tracks DEFAULT_CHECKLIST edits.
 const DEMO_START = DEFAULT_CHECKLIST.filter((r) => r.metric !== 'line60');
 const HUM = { ch: 3, from: 30 }; // C4, from 2:30 (window 30): where the demo's 60 Hz hum lives
+
+// The hum stretch on the map, in viewport px. The canvas may be CSS-scaled, so measure it.
+function humRect() {
+  const c = $('map'), r = c.getBoundingClientRect(), kx = r.width / (c._w || 1), ky = r.height / (c._h || 1);
+  const x0 = GUT + colOf(HUM.from) * c._cw, x1 = GUT + S.cols * c._cw, y0 = TOP + HUM.ch * ROW;
+  return { left: r.left + x0 * kx, right: r.left + x1 * kx, top: r.top + y0 * ky, bottom: r.top + (y0 + ROW) * ky, width: (x1 - x0) * kx, height: ROW * ky };
+}
+// The demo's guided tour. Each step moves on when the visitor does it (tour.reach calls below).
+const tour = createTour([
+  { id: 'map', text: 'Click here — this looks clean, but it isn’t.', sub: 'C4 from 2:30 has 60 Hz electrical hum the starter rules miss.', target: humRect, around: () => $('map') },
+  { id: 'teach', text: 'Press this to teach Somnium what you saw.', sub: 'It suggests a rule from the stretch you picked.', target: () => $('teach'), focus: () => $('teach') },
+  { id: 'add', text: 'Add it to your rules.', sub: 'The preview shows what it would catch.', target: () => $('pAdd'), around: () => $('proposal'), focus: () => $('pAdd'), enter: () => autoOpen('ruleBox', true) },
+  { id: 'done', text: () => (S.change && S.change.from.label !== S.change.to.label ? 'Your rule changed the verdict.' : 'Your rule is in. Check the verdict.'),
+    sub: 'The starter checklist missed that hum. Now it’s caught.', target: () => $('verdictPill'), around: () => $('verdict'), focus: () => $('tourDone'), last: true },
+], { onEnd: () => { $('tourAgain').hidden = !S.demo; if (S.demo) $('tourAgain').focus(); } });
 
 // A drawn column may cover S.step windows (long recordings aggregate; see map.js).
 const colOf = (win) => Math.floor(win / S.step);
@@ -86,12 +103,10 @@ function load(edf, { demo = false, name = '', checklist = null } = {}) {
   // Reopening an analysis restores the exact rules it was saved with.
   if (!demo && Array.isArray(checklist)) S.checklist = checklist.map((r) => ({ ...r }));
   $('proposal').hidden = true; $('ruleError').textContent = '';
-  $('tryIt').hidden = !demo; $('tryDone').hidden = true;
-  ['step1', 'step2', 'step3'].forEach((id) => $(id).classList.remove('done'));
+  tour.stop(true); $('tourAgain').hidden = !demo; // openDemo starts the tour once the page is in place
   $('teach').disabled = true;
-  $('loaded').hidden = false;
-  $('loaded').textContent = `Showing ${demo ? 'the demo recording' : name}: ${edf.labels.length} channels, ${hhmm(n * WIN)}.`;
-  $('load').classList.add('loaded');
+  $('loaded').textContent = `${demo ? 'Demo recording' : name} · ${edf.labels.length} channels, ${hhmm(n * WIN)}`;
+  $('load').hidden = true;
   $('report').hidden = false;
   resetBoxes();
   refresh();
@@ -106,6 +121,7 @@ function editChecklist(fn, what) {
   const after = S.last;
   S.change = { what, from: before, to: after };
   drawVerdict(true);
+  history.refresh(); // offers "Save rules to this analysis" when the rules now differ
 }
 
 function refresh() {
@@ -113,6 +129,7 @@ function refresh() {
   S.last = verdict(S.flags, S.by);
   drawVerdict(); drawMap(); drawEvidence(); drawChecklist();
   if (S.rule) updatePreview();
+  if ($('tplBox').open) previewTemplate();
 }
 
 function drawVerdict(flash = false) {
@@ -164,39 +181,66 @@ function drawMap() {
   c._cw = cw; c._w = L.cssW; c._h = L.cssH;
 }
 
+// Plain names for standard 10-20 sites (odd = left, even = right, z = middle). A label referenced to an
+// ear or common reference ("C3-A2", "EEG O1") keeps its site; anything else (e.g. bipolar "F7-Fpz") is shown as recorded.
+const SITES = { // standard 10-20 regions in plain words
+  FP1: 'Left forehead', FPZ: 'Mid-forehead', FP2: 'Right forehead',
+  F7: 'Left front-temple', F3: 'Left frontal', FZ: 'Midline frontal', F4: 'Right frontal', F8: 'Right front-temple',
+  T3: 'Left temple', T7: 'Left temple', T4: 'Right temple', T8: 'Right temple',
+  C3: 'Left central', CZ: 'Top-of-head', C4: 'Right central',
+  T5: 'Left back-temple', P7: 'Left back-temple', T6: 'Right back-temple', P8: 'Right back-temple',
+  P3: 'Left parietal', PZ: 'Midline parietal', P4: 'Right parietal',
+  O1: 'Left back-of-head', OZ: 'Back-of-head', O2: 'Right back-of-head',
+  A1: 'Left ear', M1: 'Left mastoid', A2: 'Right ear', M2: 'Right mastoid',
+};
+function place(label) {
+  const site = SITES[label.trim().match(/^(?:EEG\s+)?([a-z]+\d*)(?:-(?:a1|a2|m1|m2|ref|le|avg))?$/i)?.[1].toUpperCase()];
+  return site ? `${site} sensor (${label.trim()})` : `Sensor ${label.trim()}`;
+}
+
 function drawEvidence() {
   const box = $('evidence'), t = $('trace').getContext('2d');
   t.clearRect(0, 0, 9999, 9999);
-  $('trace').hidden = !S.cell; // no empty box before something is selected
+  $('trace').hidden = $('numbers').hidden = !S.cell; // no empty box before something is selected
   if (S.sel) {
     const chs = S.sel.ch1 - S.sel.ch0 + 1, secs = (endWinOf(S.sel.col1) - firstWinOf(S.sel.col0)) * WIN;
     $('evidenceMeta').textContent = `${chs} channel${chs > 1 ? 's' : ''} · ${mmss(secs)} selected`;
     autoOpen('evidenceBox');
     return box.replaceChildren(el('p', { className: 'hint', textContent: `Selected ${chs} channel${chs > 1 ? 's' : ''} over ${mmss(secs)} (${S.edf.labels[S.sel.ch0]}${chs > 1 ? `–${S.edf.labels[S.sel.ch1]}` : ''}, from ${mmss(firstWinOf(S.sel.col0) * WIN)}). Press “Teach a rule from selection” to get a suggested rule.` }));
   }
-  if (!S.cell) { $('evidenceMeta').textContent = 'Click a square on the map'; return box.replaceChildren(el('p', { className: 'hint', textContent: 'Click a square on the map to see why it was flagged, or why not.' })); }
+  if (!S.cell) $('evidenceMeta').textContent = 'Click a square on the map';
+  if (!S.cell) return box.replaceChildren(el('p', { className: 'hint', textContent: 'Click a square on the map to see why it was flagged, or why not.' }));
   const { ch, win } = S.cell, hits = S.flags.filter((f) => f.ch === ch && f.win === win);
   const end = S.step > 1 ? win + S.step : win + 1;
   $('evidenceMeta').textContent = `${S.edf.labels[ch]} · ${mmss(win * WIN)}–${mmss(end * WIN)} · ${hits.length ? 'flagged' : 'clean'}`;
   autoOpen('evidenceBox');
-  const title = el('h3', { className: 'ev-title' }, `${S.edf.labels[ch]} · ${mmss(win * WIN)}–${mmss(end * WIN)} `,
-    el('span', { className: `badge ${hits.length ? 'bad' : 'ok'}`, textContent: hits.length ? 'Flagged' : 'Clean' }));
-  const body = hits.length
-    ? hits.flatMap((f) => {
-      const m = METRICS[f.rule.metric];
-      return [el('p', { className: 'simple', textContent: m.simple }),
-        el('p', { className: 'tech', textContent: `${m.label} is ${fmt(f.rule.metric, f.value)}, ${f.rule.op === '<' ? 'under' : 'over'} your rule “${f.rule.name}” (${f.rule.op} ${fmt(f.rule.metric, f.rule.value)}). ${m.why}.` })];
-    })
-    : [el('p', { textContent: 'No rule flagged this square. If the trace still looks wrong to you, drag across it and teach a rule.' })];
+  // Simplified view first: status, where/when, what happened, what to do. Rule text and values sit behind "Show the numbers".
+  const title = el('h3', { className: 'ev-title' },
+    el('span', { className: `badge ${hits.length ? 'bad' : 'ok'}`, textContent: hits.length ? 'Flagged' : 'Clean' }),
+    `${place(S.edf.labels[ch])}, ${mmss(win * WIN)}–${mmss(end * WIN)}`);
+  // One line per cause: flat + faint are both "lost contact", so the same advice isn't repeated.
+  const causes = [...new Map(hits.map((f) => [METRICS[f.rule.metric].cause, METRICS[f.rule.metric]])).values()];
+  const list = (items, cls) => (items.length === 1 ? el('p', { className: cls, textContent: items[0] }) : el('ul', { className: cls }, ...items.map((t) => el('li', { textContent: t }))));
+  const body = causes.length
+    ? [list(causes.map((m) => m.simple), 'ev-lead'), el('p', { className: 'ev-do-head', textContent: 'What to do' }), list(causes.map((m) => `${m.fix}.`), 'ev-do')]
+    : [el('p', { className: 'ev-lead', textContent: 'Looks fine. None of your rules found a problem here.' }),
+      el('p', { className: 'hint', textContent: 'If the trace below still looks wrong to you, drag across this stretch on the map and press “Teach a rule from selection”.' })];
   if (S.step > 1) body.push(el('p', { className: 'hint', textContent: `This square covers ${S.step} windows; the trace shows the first.` }));
+  box.replaceChildren(title, ...body);
   const m = S.by[ch][win];
   const dl = el('dl', { className: 'metrics' }, ...Object.keys(METRICS).flatMap((k) => [el('dt', { textContent: METRICS[k].label }), el('dd', { textContent: fmt(k, m[k]) })]));
-  box.replaceChildren(title, ...body, dl);
+  $('numbersBody').replaceChildren(...hits.map((f) => {
+    const mm = METRICS[f.rule.metric];
+    return el('p', { className: 'tech', textContent: `${mm.label} is ${fmt(f.rule.metric, f.value)}, ${f.rule.op === '<' ? 'under' : 'over'} your rule “${f.rule.name}” (${f.rule.op} ${fmt(f.rule.metric, f.rule.value)}). ${mm.why}.` });
+  }), dl);
   const fs = S.edf.rates[ch], x = S.edf.signals[ch].subarray(win * WIN * fs, (win + 1) * WIN * fs);
   const c = $('trace'); c.width = c.clientWidth * (devicePixelRatio || 1);
-  const g = c.getContext('2d'), mx = Math.max(...x.map(Math.abs), 1);
+  // Centre on the window mean, and never zoom past ±50 µV: flat stays flat and faint stays faint.
+  let mean = 0; for (const v of x) mean += v; mean /= x.length || 1;
+  let mx = 50; for (const v of x) mx = Math.max(mx, Math.abs(v - mean));
+  const g = c.getContext('2d');
   g.strokeStyle = getComputedStyle(document.body).getPropertyValue('--accent'); g.lineWidth = 1.5; g.beginPath();
-  x.forEach((v, i) => { const px = (i / (x.length - 1)) * c.width, py = c.height / 2 - (v / mx) * (c.height / 2 - 6); i ? g.lineTo(px, py) : g.moveTo(px, py); });
+  x.forEach((v, i) => { const px = (i / (x.length - 1)) * c.width, py = c.height / 2 - ((v - mean) / mx) * (c.height / 2 - 6); i ? g.lineTo(px, py) : g.moveTo(px, py); });
   g.stroke();
 }
 
@@ -233,12 +277,19 @@ function select(a, h) {
   S.cell = null; $('teach').disabled = false;
   $('teachHint').textContent = 'Region selected. Press “Teach a rule from selection”.';
   drawMap(); drawEvidence();
+  if (S.sel.ch0 <= HUM.ch && S.sel.ch1 >= HUM.ch && S.sel.col1 >= colOf(HUM.from)) tour.reach('teach'); // dragged over the hum
 }
 function inspect(h) {
   S.sel = null; S.cell = h; $('teach').disabled = true;
   $('teachHint').textContent = 'Click a square to see why. Drag across several squares to teach a rule.';
-  if (h.ch === HUM.ch && h.win >= HUM.from) $('step1').classList.add('done');
   drawMap(); drawEvidence();
+  // Tour: clicking any hum square is enough. Pre-select the whole hum stretch so step 2 needs no precise drag.
+  if (!tour.at('map') && !tour.at('teach')) return;
+  if (h.ch === HUM.ch && h.win >= HUM.from) {
+    S.sel = { ch0: HUM.ch, ch1: HUM.ch, col0: colOf(HUM.from), col1: S.cols - 1 };
+    $('teach').disabled = false; drawMap();
+    tour.reach('teach');
+  } else if (tour.at('teach')) tour.go('map'); // the selection is gone, so point back at the hum
 }
 let anchor = null;
 $('map').onpointerdown = (e) => { anchor = hit(e); if (anchor) $('map').setPointerCapture(e.pointerId); };
@@ -273,6 +324,7 @@ function showProposal(rule) {
   $('pMetric').value = rule.metric; $('pOp').value = rule.op; $('pValue').value = +(rule.value * unit(rule.metric)).toFixed(2);
   updatePreview();
   $('proposal').scrollIntoView({ block: 'nearest' });
+  tour.reach('add');
 }
 function readProposal() {
   const metric = $('pMetric').value;
@@ -291,7 +343,10 @@ function updatePreview() {
     : el('strong', { className: 'will-change', textContent: `Adding it changes the verdict: ${now.label} → ${next.label}.` }));
   drawMap();
 }
-function clearProposal() { S.rule = null; S.preview = new Set(); $('proposal').hidden = true; $('ruleError').textContent = ''; drawMap(); }
+function clearProposal() {
+  S.rule = null; S.preview = new Set(); $('proposal').hidden = true; $('ruleError').textContent = ''; drawMap();
+  if (tour.at('add')) tour.go(S.sel ? 'teach' : 'map'); // no Add rule button to point at any more
+}
 
 $('pMetric').replaceChildren(...Object.entries(METRICS).map(([k, m]) => el('option', { value: k, textContent: m.label })));
 ['pMetric', 'pOp', 'pValue'].forEach((id) => ($(id).oninput = updatePreview));
@@ -300,10 +355,9 @@ $('ruleForm').onsubmit = (e) => {
   const r = parseRule($('ruleText').value);
   if (!r) { $('ruleError').textContent = 'I couldn’t read that. Try “flag 60 Hz hum above 15%” or “flatline over 30%”.'; return; }
   $('ruleError').textContent = ''; showProposal(r);
-  if (r.metric === 'line60') $('step2').classList.add('done');
 };
 $('teach').onclick = () => {
-  autoOpen('ruleBox', true); // the proposal (or the "no measure sets that region apart" note) lives in this box
+  autoOpen('ruleBox', true); // the proposal lives in this box
   const cells = [];
   for (let c = S.sel.ch0; c <= S.sel.ch1; c++) for (let col = S.sel.col0; col <= S.sel.col1; col++) {
     for (let w = firstWinOf(col); w < endWinOf(col); w++) cells.push({ ch: c, win: w });
@@ -312,18 +366,56 @@ $('teach').onclick = () => {
   if (!r) { $('ruleError').textContent = 'No single measure sets that region apart from the rest. Try selecting a tighter region.'; $('ruleError').scrollIntoView({ block: 'nearest' }); return; }
   $('ruleError').textContent = 'Suggested from your selection. Check the preview and adjust the threshold if you need to.';
   showProposal(r);
-  $('step2').classList.add('done');
 };
 $('pAdd').onclick = () => {
   const r = S.rule;
   editChecklist(() => S.checklist.push(r), `Your rule “${r.name}”`);
+  tour.reach('done'); // before clearProposal, which would send an open tour back a step
   $('ruleText').value = ''; clearProposal();
   S.sel = null; $('teach').disabled = true; drawMap(); drawEvidence();
   $('teachHint').textContent = 'Click a square to see why. Drag across several squares to teach a rule.';
-  if (!$('tryIt').hidden) { $('step3').classList.add('done'); $('tryDone').hidden = S.change.from.label === S.change.to.label; }
   $('verdict').scrollIntoView({ block: 'nearest' });
 };
 $('pCancel').onclick = clearProposal;
+
+// ---- templates: preset checklists with the user's own numbers (data and validation in templates.js)
+const tpl = () => TEMPLATES[$('tplPick').value];
+const tplInputs = () => [...$('tplRules').querySelectorAll('input')];
+const readTemplate = () => buildRules(tpl(), Object.fromEntries(tplInputs().map((i) => [i.name, i.value])));
+function drawTemplate() {
+  const t = tpl();
+  $('tplAbout').textContent = t.about;
+  $('tplRules').replaceChildren(...Object.entries(t.values).map(([metric, v]) => {
+    const f = FIELDS[metric];
+    const input = el('input', { type: 'number', name: metric, value: v, min: f.min, max: f.max, step: f.step, inputMode: 'decimal', id: `tpl-${metric}` });
+    input.setAttribute('aria-describedby', `tpl-${metric}-err`);
+    return el('li', {}, el('label', {}, `${f.before} `, el('span', { className: 'tpl-num' }, input, unitText(f.unit))), el('span', { className: 'tpl-err', id: `tpl-${metric}-err` }));
+  }));
+  previewTemplate();
+}
+function previewTemplate() {
+  if (!S.edf) return;
+  const { rules, errors = {} } = readTemplate();
+  tplInputs().forEach((i) => { i.setAttribute('aria-invalid', String(Boolean(errors[i.name]))); $(`${i.id}-err`).textContent = errors[i.name] || ''; });
+  if (!rules) return $('tplCount').replaceChildren('Fix the numbers marked above to see what this would flag.');
+  const v = verdict(evaluate(rules, S.by), S.by);
+  $('tplCount').replaceChildren(`Would flag ${pct(v.bad)} of this recording (your rules now: ${pct(S.last.bad)}), so it would be `,
+    el('strong', { textContent: v.label }), v.label === S.last.label ? ', same as now.' : ` instead of ${S.last.label}.`);
+}
+$('tplPick').replaceChildren(...TEMPLATES.map((t, i) => el('option', { value: i, textContent: t.name })));
+$('tplPick').onchange = drawTemplate;
+$('tplRules').oninput = previewTemplate;
+$('tplBox').ontoggle = () => $('tplBox').open && previewTemplate();
+$('tplForm').onsubmit = (e) => {
+  e.preventDefault();
+  previewTemplate();
+  const { rules } = readTemplate();
+  if (!rules) return tplInputs().find((i) => i.getAttribute('aria-invalid') === 'true')?.focus();
+  clearProposal();
+  editChecklist(() => { S.checklist = rules; }, `The “${tpl().name}” template`);
+  $('verdict').scrollIntoView({ block: 'nearest' });
+};
+drawTemplate();
 
 // ---- checklist import/export (imported JSON is untrusted: validate every field)
 $('export').onclick = () => {
@@ -345,13 +437,23 @@ async function openFile(f) {
     const edf = parseEDF(await f.arrayBuffer());
     S.file = f; // kept so a saved analysis can store (and reopen) it
     load(edf, { name: f.name });
-  } catch (err) { $('error').textContent = `Couldn’t read that file: ${err.message}`; }
+  } catch (err) { $('error').textContent = `Couldn’t read that file: ${err.message}`; return; }
+  history.autoSave(); // every real recording joins the sidebar list; the demo never does on its own
 }
+// "+ New analysis": back to the upload view.
+function showUpload() {
+  S.edf = null; S.file = null; S.demo = false; tour.stop(true);
+  $('report').hidden = true; $('load').hidden = false;
+  $('error').textContent = ''; $('file').value = '';
+  scrollTo(0, 0);
+}
+function openDemo() { history.setActive(null); load(makeDemo(), { demo: true }); scrollTo(0, 0); tour.start(); $('tourAgain').hidden = true; }
+$('tourAgain').onclick = openDemo; // a fresh demo: the tour needs the starter rules back
 $('file').onchange = (e) => e.target.files[0] && openFile(e.target.files[0]);
 $('drop').ondragover = (e) => { e.preventDefault(); $('drop').classList.add('over'); };
 $('drop').ondragleave = () => $('drop').classList.remove('over');
 $('drop').ondrop = (e) => { e.preventDefault(); $('drop').classList.remove('over'); e.dataTransfer.files[0] && openFile(e.dataTransfer.files[0]); };
-$('demo').onclick = () => { load(makeDemo(), { demo: true }); $('report').scrollIntoView({ block: 'start' }); };
+$('demo').onclick = openDemo;
 // Mount the history sidebar before the demo auto-load so load() can refresh it.
 const history = mountHistory(supabase, {
   getRecording: recordingMeta,
@@ -361,12 +463,15 @@ const history = mountHistory(supabase, {
     const edf = parseEDF(buffer);
     S.file = new File([buffer], record.filename, { type: 'application/edf' });
     load(edf, { name: record.filename, checklist: record.checklist });
-    $('report').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    scrollTo(0, 0);
   },
+  onNew: showUpload,
 });
-if (new URLSearchParams(location.search).has('demo')) load(makeDemo(), { demo: true });
 
+// The app is gated: nothing runs until sign-in, then ?demo (kept through sign-in) opens the demo.
 mountAccount(supabase, {
+  onSignedIn: (intent) => { if (intent.has('demo')) openDemo(); },
+  onSignedOut: () => { history.setActive(null); showUpload(); },
   getRules: () => S.checklist,
   setRules: rules => {
     if (!S.edf) { S.checklist = rules; S.starter = false; writeSaved(rules); return; }

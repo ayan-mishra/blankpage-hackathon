@@ -1,6 +1,6 @@
 # Somnium: written submission
 
-Somnium checks EEG recordings in the browser before anyone analyzes them. You drop in an EDF file and get a map of which stretches are usable, with a plain-English reason for every flag. The quality rules belong to the user. You can type one in words, drag across a stretch you think is bad and have Somnium suggest one, or set the numbers yourself. The rules save as a checklist file you can hand to the next person.
+Somnium checks EEG recordings before anyone analyzes them. You drop in an EDF file and get a map of which stretches are usable, with a plain-English reason for every flag. The quality rules belong to the user. You can type one in words, drag across a stretch you think is bad and have Somnium suggest one, or set the numbers yourself. The rules save as a checklist file you can hand to the next person.
 
 Live pages: `index.html` (landing), `app.html` (one recording), `study.html` (a whole study), `trailer.html` (60-second trailer).
 
@@ -21,7 +21,7 @@ The existing tools are built for a third group: people who write MATLAB or Pytho
 
 ### `app.html`: one recording
 
-- Parses 16-bit EDF in the browser. Nothing is uploaded.
+- Parses 16-bit EDF. Signed-in users keep their analyses, and optionally the recordings, in a private Supabase account.
 - Cuts each channel into 5-second windows and computes a few documented measurements per window: flat-line share, peak-to-peak amplitude, kurtosis (spikiness), and the share of power at 50 Hz and at 60 Hz (`src/metrics.js`). An 8-hour, 6-channel recording at 256 Hz is measured and checked in about a quarter of a second on our laptop.
 - Applies a built-in checklist (flat line over 50%, 50 or 60 Hz hum over 20%, swings over 300 µV, spikiness over 8, and a "signal too faint" rule, standard deviation under 2 µV, that catches headbands that never touched the skin [9]) and gives an overall verdict: usable, usable after fixes, or not usable.
 - Draws a recording map: one row per channel, one square per window (long recordings group windows into columns so the canvas fits). Clicking a square shows the measurement, the rule that tripped, the usual cause, an "In plain words" line and the raw trace for that window.

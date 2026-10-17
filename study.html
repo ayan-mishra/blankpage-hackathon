@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Somnium · Check a study</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%276%27 fill=%27%23fbf1ef%27/%3E%3Cpath d=%27M2 17l4-1 3-8 4 17 4-14 3 9 3-4 5 1%27 fill=%27none%27 stroke=%27%23191a33%27 stroke-width=%272.4%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E">
-<meta name="description" content="See which study participants are wearing their sleep headband properly. Runs in your browser.">
+<meta name="description" content="See which study participants are wearing their sleep headband properly.">
 <link rel="stylesheet" href="style.css">
 <style>
 /* study page only: the shared sheet (style.css) belongs to both product pages */
@@ -53,15 +53,37 @@ td>div+.tell{margin-top:10px}
 </style>
 </head>
 <body>
-<noscript><p>Somnium needs JavaScript to read recordings in your browser.</p></noscript>
+<noscript><p>Somnium needs JavaScript to read recordings.</p></noscript>
+<section id="gate" class="gate" aria-labelledby="gateTitle">
+  <div class="card gate-card">
+    <h1 id="gateTitle"><a href="./">Somnium</a></h1>
+    <p class="gate-lead">Check a whole study’s EEG recordings. Sign in or create an account to open the app.</p>
+    <form id="authForm" hidden>
+      <label>Email<input id="email" type="email" autocomplete="email" required maxlength="254"></label>
+      <label>Password<input id="password" type="password" autocomplete="current-password" required maxlength="128"></label>
+      <button id="login" name="action" value="login">Sign in</button>
+      <div class="gate-alt">
+        <button id="signup" name="action" value="signup" class="ghost">Create account</button>
+        <button id="forgotPassword" name="action" value="reset" class="ghost">Send password reset</button>
+      </div>
+    </form>
+    <form id="recoveryForm" hidden>
+      <label>New password<input id="newPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label>
+      <button>Update password</button>
+    </form>
+    <p class="hint account-status" role="status" aria-live="polite">Checking your sign-in…</p>
+  </div>
+</section>
+<div id="appShell" hidden>
 <header>
   <h1><a href="./">Somnium</a></h1>
+  <p id="signedIn" class="study-account"><span id="accountEmail"></span><button id="signOut" type="button" class="ghost small">Sign out</button><span class="account-status"></span></p>
   <nav class="tabs"><a href="app.html">Check one recording</a><a href="study.html" aria-current="page">Check a study</a></nav>
 </header>
 <main>
   <section class="card">
     <h2>Is everyone wearing the headband properly?</h2>
-    <p class="intro">Drop in the recordings from your participants, one file per night. You get one row per night: who’s fine, who needs a follow-up, what went wrong, and what to tell them. Nothing is uploaded; the files are read on your computer.</p>
+    <p class="intro">Drop in the recordings from your participants, one file per night. You get one row per night: who’s fine, who needs a follow-up, what went wrong, and what to tell them.</p>
     <div class="rules-used">
       <span id="rulesUsed"></span>
       <label class="ghost btn small">Import checklist (.json)<input type="file" id="importRules" accept=".json,application/json" class="sr-only"></label>
@@ -105,6 +127,7 @@ td>div+.tell{margin-top:10px}
     </dl>
   </details>
 </main>
+</div>
 <script type="module" src="src/study.js"></script>
 </body>
 </html>

@@ -2,6 +2,71 @@ import { makeDemo } from './demo.js';
 import { windowMetrics } from './metrics.js';
 import { stripChart } from './strip.js';
 import { DEFAULT_CHECKLIST, evaluate, verdict, explain, proposeRule } from './rules.js';
+import { supabase } from './supabase.js';
+import { submitAuth } from './auth.js';
+
+// ---- hero account: the app pages need an account, so signed-out links into them stop here
+// at the sign-in form and remember where the visitor was going.
+{
+  const $ = (id) => document.getElementById(id);
+  const form = $('heroForm'), email = $('heroEmail'), password = $('heroPassword'), status = $('heroStatus');
+  // Same-origin path only; a leading "//" would make location.assign leave the site.
+  const appPath = (href) => {
+    const u = new URL(href, location.href);
+    return u.origin === location.origin ? u.pathname.replace(/^\/+/, '/') + u.search : '/app.html';
+  };
+  let session = null, busy = false, next = appPath('app.html');
+  const say = (message, error = false) => { status.textContent = message; status.classList.toggle('error', error); };
+  const render = () => {
+    form.hidden = !supabase || !!session;
+    $('heroSignedIn').hidden = !session;
+    $('heroWho').textContent = session?.user.email ?? '';
+    $('demoNote').textContent = session ? 'You’re signed in, so both open straight away.' : 'Both open after you sign in.';
+    form.querySelectorAll('button').forEach((b) => { b.disabled = busy; });
+    $('heroSignOut').disabled = busy;
+  };
+  const what = { '?demo': 'the demo recording', '?sample': 'the sample study' };
+  document.addEventListener('click', (event) => {
+    const link = event.target.closest?.('a[href]');
+    if (session || !link || !/^(app|study)\.html/.test(link.getAttribute('href'))) return;
+    event.preventDefault();
+    next = appPath(link.href);
+    if (!supabase) { status.focus(); return; }
+    say(`Sign in or create an account to open ${what[new URL(link.href).search] ?? 'Somnium'}.`);
+    email.focus();
+  });
+  if (!supabase) say('Accounts aren’t configured on this copy of Somnium, so the app can’t open.', true);
+  else {
+    supabase.auth.onAuthStateChange((_event, s) => { session = s; render(); });
+    form.onsubmit = async (event) => {
+      event.preventDefault();
+      if (busy) return;
+      const action = event.submitter?.value ?? 'login';
+      for (const input of [email, password]) input.removeAttribute('aria-invalid');
+      const bad = !email.value.trim() || !email.checkValidity() ? [email, 'Enter your email address.']
+        : action !== 'reset' && !password.value ? [password, 'Enter your password.'] : null;
+      if (bad) { bad[0].setAttribute('aria-invalid', 'true'); say(bad[1], true); bad[0].focus(); return; }
+      busy = true; render(); say('Working…');
+      try {
+        const outcome = await submitAuth(supabase, action, email.value.trim(), password.value, next);
+        password.value = '';
+        if (outcome === 'signedIn') { say('Signed in. Opening Somnium…'); location.assign(next); return; }
+        say(outcome === 'reset' ? 'If that address has an account, a password reset email is on its way.'
+          : 'Check your email and click the link to confirm your account. It opens Somnium, signed in.');
+      } catch (error) {
+        say(error.message || 'Request failed. Please try again.', true);
+        if (/password/i.test(error.message ?? '')) { password.setAttribute('aria-invalid', 'true'); password.focus(); }
+      } finally { busy = false; render(); }
+    };
+    $('heroSignOut').onclick = async () => {
+      busy = true; render();
+      const { error } = await supabase.auth.signOut({ scope: 'local' });
+      busy = false; render();
+      say(error ? error.message : 'Signed out.', !!error);
+    };
+  }
+  render();
+}
 
 // The landing page is drawn from the real demo recording and the real rule engine.
 // No hardware-acceleration gate here (study.js has one): a modal must not be the first thing a visitor sees.
