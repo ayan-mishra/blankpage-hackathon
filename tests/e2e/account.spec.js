@@ -1,8 +1,38 @@
 import { test, expect } from '@playwright/test';
-import { mockBackend, login, openAccount, session, user, noOverflow } from './helpers.js';
+import { mockBackend, login, openAccount, session, user, noOverflow, edfFile } from './helpers.js';
 
 const status = page => page.getByRole('status');
 test.beforeEach(async ({ page }) => { await mockBackend(page); });
+
+test('a recording still being read at logout cannot open or autosave under the next account', async ({ page }) => {
+  const state = await mockBackend(page);
+  await page.goto('/app.html');
+  await login(page);
+  const file = await edfFile(page, 'private-night.edf');
+  await page.evaluate(() => {
+    const read = File.prototype.arrayBuffer;
+    File.prototype.arrayBuffer = async function () {
+      window.recordingReadStarted = true;
+      await new Promise(resolve => { window.finishRecordingRead = resolve; });
+      const buffer = await read.call(this);
+      window.recordingReadFinished = true;
+      return buffer;
+    };
+  });
+  await page.locator('#file').setInputFiles(file);
+  await expect.poll(() => page.evaluate(() => window.recordingReadStarted)).toBe(true);
+  await openAccount(page);
+  await page.locator('#signOut').click();
+  await expect(page.locator('#authForm')).toBeVisible();
+  const next = { ...user, id: '00000000-0000-4000-8000-000000000002', email: 'second@example.com' };
+  await page.route('**/auth/v1/token?**', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ...session(), user: next }) }));
+  await login(page);
+  await page.evaluate(() => window.finishRecordingRead());
+  await expect.poll(() => page.evaluate(() => window.recordingReadFinished)).toBe(true);
+  await expect(page.locator('#report')).toBeHidden();
+  await expect(page.locator('#historyList li')).toHaveCount(0);
+  expect(state.posted).toHaveLength(0);
+});
 
 test('signed out, the app page shows only the sign-in card', async ({ page }) => {
   await page.goto('/app.html?demo');

@@ -30,7 +30,7 @@ test('a real recording is saved automatically, shows in the sidebar and reopens'
   // Metadata only: no signal data is ever written to the row.
   expect(Object.keys(state.posted[0]).sort()).toEqual([
     'channels', 'checklist', 'created_at', 'duration_sec', 'filename',
-    'local_id', 'sample_rate', 'size_bytes', 'storage_path',
+    'local_id', 'sample_rate', 'size_bytes', 'storage_path', 'user_id',
   ]);
 
   await openRecording(page, 'night2.edf');

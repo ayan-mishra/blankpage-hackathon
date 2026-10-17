@@ -30,6 +30,16 @@ test('one bad channel out of two still counts as worn (half clean)', () => {
   assert.equal(analyzeNight(by, 10, DEFAULT_CHECKLIST).status, 'ok');
 });
 
+test('a sensor failing all night is named and never described as clean', () => {
+  const by = [night(60, () => true)[0], night(60, () => false)[0]];
+  const r = analyzeNight(by, 10, DEFAULT_CHECKLIST, ['F7-Fpz', 'F8-Fpz']);
+  assert.equal(r.status, 'ok'); // keep the existing half-clean grading policy
+  assert.match(r.summary, /F7-Fpz had problems for 100% of the night/);
+  assert.match(r.simple, /whole night/);
+  assert.doesNotMatch(r.summary + r.simple + r.action, /Clean signal all night|Everything worked|Nothing to do/);
+  assert.match(r.action, /sensor/);
+});
+
 test('hum is attributed to interference', () => {
   const r = analyzeNight(night(60, (i) => i >= 20, () => ({ ...clean(), line50: 0.9 })), 10, DEFAULT_CHECKLIST);
   assert.equal(r.cause, 'hum'); assert.match(r.action, /cables/);

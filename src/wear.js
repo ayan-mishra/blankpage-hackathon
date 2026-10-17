@@ -52,7 +52,7 @@ export function analyzeNight(by, winSec, checklist, labels = []) {
   }
   // one sensor failing while the other works still hides a fault the coordinator should know about
   const share = flagged.map((c) => c.filter(Boolean).length / (n || 1));
-  const weak = share.map((v, i) => (v >= 0.25 && v < 1 ? i : -1)).filter((i) => i >= 0 && share.some((o) => o < 0.25));
+  const weak = share.map((v, i) => (v >= 0.25 ? i : -1)).filter((i) => i >= 0 && share.some((o) => o < 0.25));
   if (status === 'ok' && cause && longest) summary = `Mostly clean. ${summary}`;
   if (weak.length) {
     const note = `${weak.map((i) => labels[i] || `Channel ${i + 1}`).join(' and ')} had problems for ${Math.round(Math.max(...weak.map((i) => share[i])) * 100)}% of the night, though the other sensor was fine.`;
@@ -60,7 +60,7 @@ export function analyzeNight(by, winSec, checklist, labels = []) {
   }
   let simple = 'Everything worked all night.';
   if (cause && longest) simple = `${SIMPLE[cause]} ${lostToEnd ? 'It never came back.' : 'It got better afterward.'}`;
-  if (weak.length) simple = `${cause && longest ? `${simple} ` : ''}One of the two sensors wasn’t working properly for a while.`;
+  if (weak.length) simple = `${cause && longest ? `${simple} ` : ''}One of the sensors wasn’t working properly ${weak.some(i => share[i] === 1) ? 'for the whole night' : 'for a while'}.`;
   const action = status === 'ok' && weak.length ? 'Fine for now. Check that sensor’s contact at the next visit.' : status === 'ok' ? 'Nothing to do.' : (cause ? METRICS[Object.keys(METRICS).find((k) => METRICS[k].cause === cause)].fix : 'Check the headband fit.');
   const ask = weak.length && !cause ? 'Please check that both sensors touch your forehead.' : ASK[cause] || 'Please check the headband fit.';
   return { good, goodPct, status, cause, summary, simple, action, ask, duration: n * winSec };

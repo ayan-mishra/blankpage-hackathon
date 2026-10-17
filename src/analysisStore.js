@@ -100,13 +100,14 @@ export function createAnalysisService({
   client = null,
   backend = idbBackend() ?? memoryBackend(),
   now = () => new Date(),
+  localOwner = null,
 } = {}) {
   let session = null;
   let generation = 0;
   let syncing = null;
 
-  const userId = () => session?.user?.id ?? null;
-  const signedIn = () => Boolean(client && userId());
+  const userId = () => session?.user?.id ?? localOwner;
+  const signedIn = () => Boolean(client && session?.user?.id);
 
   // A browser can be shared. Anonymous analyses belong to whoever claims them;
   // another account's rows are never shown and never uploaded.
@@ -117,7 +118,8 @@ export function createAnalysisService({
   }
 
   async function push(rec) {
-    const { error } = await client.from('analyses').insert(toRow(rec));
+    // RLS must reject a changed session instead of assigning its user_id default.
+    const { error } = await client.from('analyses').insert({ ...toRow(rec), user_id: rec.owner });
     // 23505 = already in the account (another tab or device). Rows are immutable,
     // so a duplicate is success, not a failure.
     if (error && error.code !== '23505') throw error;
@@ -150,6 +152,7 @@ export function createAnalysisService({
     // network fails; the recording is stored only when it fits the plan limit.
     async save({ meta, file = null, checklist = [], keep = true }) {
       const uid = userId();
+      const gen = generation;
       const rec = buildAnalysis(meta, { checklist, owner: uid });
       await backend.put(rec);
 
@@ -160,8 +163,9 @@ export function createAnalysisService({
           tooBig = true;
         } else {
           rec.sizeBytes = file.size;
-          try { await backend.putRecording(rec.id, file); } catch { /* no local cache; cloud may still work */ }
-          if (signedIn()) {
+          try { await backend.putRecording(rec.id, file); }
+          catch (error) { if (!signedIn()) storageError = error; }
+          if (signedIn() && gen === generation) {
             const path = `${uid}/${rec.id}.edf`;
             try {
               const { error } = await client.storage.from(BUCKET).upload(path, file, {
@@ -178,11 +182,15 @@ export function createAnalysisService({
         }
       }
 
+      if (gen !== generation) {
+        return { record: rec, synced: false, storageError, tooBig, error: new Error('Account changed while saving. The recording stays with its original account in this browser.') };
+      }
       if (!signedIn()) {
         return { record: rec, synced: false, storageError, tooBig, error: null };
       }
       try {
         await push(rec);
+        if (gen !== generation) return { record: rec, synced: false, storageError, tooBig, error: null };
         rec.synced = true;
         await backend.put(rec);
         return { record: rec, synced: true, storageError, tooBig, error: null };
@@ -248,9 +256,11 @@ export function createAnalysisService({
           const remoteIds = new Set(remote.map((r) => r.id));
 
           const local = await readLocal();
+          if (gen !== generation) return { pushed: 0, pulled: 0, total: 0, error: null };
           const mine = local.filter((r) => visible(r, uid));
           let pushed = 0;
           for (const rec of mine) {
+            if (gen !== generation) return { pushed, pulled: 0, total: 0, error: null };
             if (rec.synced || remoteIds.has(rec.id)) continue;
             const claimed = { ...rec, owner: uid };
             try {

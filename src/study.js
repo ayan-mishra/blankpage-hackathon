@@ -12,6 +12,7 @@ const WIN = 10; // seconds per window
 const $ = (id) => document.getElementById(id);
 const ORDER = { error: -1, bad: 0, check: 1, ok: 2 };
 let rows = [], last = null;
+let runGeneration = 0;
 let checklist = readSaved(); // null = built-in default; else the one built in app.html or imported here
 
 function checkEdf(file, edf) {
@@ -91,7 +92,12 @@ function summary() {
 
 function render() {
   $('results').hidden = !rows.length;
-  if (!rows.length) return;
+  if (!rows.length) {
+    $('summary').replaceChildren();
+    document.querySelector('#table tbody').replaceChildren();
+    $('onlyBadCount').textContent = '';
+    return;
+  }
   $('summary').replaceChildren(...summary());
   $('onlyBadCount').textContent = `(${rows.filter(needsFollowUp).length})`;
   const shown = [...rows].sort((a, b) => ORDER[kindOf(a)] - ORDER[kindOf(b)] || a.participant.localeCompare(b.participant, undefined, { numeric: true }))
@@ -122,14 +128,24 @@ function render() {
 }
 
 async function run(items) {
+  const gen = ++runGeneration;
   rows = []; last = items;
+  render();
   for (let i = 0; i < items.length; i++) {
     const { name, load } = items[i];
     $('bar').hidden = false; $('bar').value = i / items.length;
     $('progress').textContent = `Checking ${i + 1} of ${items.length}: ${name}`;
     await new Promise((r) => setTimeout(r, 0)); // let the progress text paint
-    try { rows.push(checkEdf(name, await load())); }
-    catch (e) { rows.push({ participant: participantOf(name), file: name, error: `Couldn’t read this file: ${e.message}` }); }
+    if (gen !== runGeneration) return;
+    let row;
+    try {
+      const edf = await load();
+      if (gen !== runGeneration) return;
+      row = checkEdf(name, edf);
+    }
+    catch (e) { row = { participant: participantOf(name), file: name, error: `Couldn’t read this file: ${e.message}` }; }
+    if (gen !== runGeneration) return;
+    rows.push(row);
     render();
   }
   $('bar').hidden = true;
@@ -167,4 +183,13 @@ $('importRules').onchange = async (e) => {
 addEventListener('storage', (e) => { if (e.key === null || e.key === SAVED_KEY) { checklist = readSaved(); drawRules('Your checklist changed in another tab.'); if (last) run(last); } });
 drawRules();
 // Gated like app.html; ?sample (kept through sign-in) runs the sample study.
-mountAccount(supabase, { onSignedIn: (intent) => { if (intent.has('sample')) $('sample').click(); } });
+mountAccount(supabase, {
+  onSignedIn: (intent) => { if (intent.has('sample')) $('sample').click(); },
+  onSignedOut: () => {
+    runGeneration++;
+    rows = []; last = null;
+    $('files').value = ''; $('onlyBad').checked = false;
+    $('bar').hidden = true; $('progress').textContent = '';
+    render();
+  },
+});

@@ -57,7 +57,7 @@ td>div+.tell{margin-top:10px}
 <section id="gate" class="gate" aria-labelledby="gateTitle">
   <div class="card gate-card">
     <h1 id="gateTitle"><a href="./">Somnium</a></h1>
-    <p class="gate-lead">Check a whole study’s EEG recordings. Sign in or create an account to open the app.</p>
+    <p class="gate-lead">Check a whole study’s EEG recordings. Sign in or continue as guest on this device.</p>
     <form id="authForm" hidden>
       <label>Email<input id="email" type="email" autocomplete="email" required maxlength="254"></label>
       <label>Password<input id="password" type="password" autocomplete="current-password" required maxlength="128"></label>
@@ -67,6 +67,7 @@ td>div+.tell{margin-top:10px}
         <button id="forgotPassword" name="action" value="reset" class="ghost">Send password reset</button>
       </div>
     </form>
+    <button id="continueGuest" type="button" class="ghost">Continue as guest</button>
     <form id="recoveryForm" hidden>
       <label>New password<input id="newPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label>
       <button>Update password</button>

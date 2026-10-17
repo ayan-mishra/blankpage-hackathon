@@ -14,6 +14,7 @@ const WIN = 5; // seconds per window
 const $ = (id) => document.getElementById(id);
 const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
 const S = { edf: null, name: '', file: null, demo: false, by: [], checklist: readSaved() ?? [...DEFAULT_CHECKLIST], flags: [], preview: new Set(), sel: null, cell: null, rule: null, step: 1, cols: 0, last: null, change: null, starter: false };
+let loadGeneration = 0;
 
 // Result boxes fold away. They open themselves when there is something to show: an
 // explicit action (teaching a rule) always unfolds, a passive one (clicking a square)
@@ -432,22 +433,26 @@ $('import').onchange = async (e) => {
 
 // ---- loading
 async function openFile(f) {
+  const gen = ++loadGeneration;
   $('error').textContent = '';
   try {
-    const edf = parseEDF(await f.arrayBuffer());
+    const buffer = await f.arrayBuffer();
+    if (gen !== loadGeneration) return;
+    const edf = parseEDF(buffer);
     S.file = f; // kept so a saved analysis can store (and reopen) it
     load(edf, { name: f.name });
-  } catch (err) { $('error').textContent = `Couldn’t read that file: ${err.message}`; return; }
+  } catch (err) { if (gen === loadGeneration) $('error').textContent = `Couldn’t read that file: ${err.message}`; return; }
   history.autoSave(); // every real recording joins the sidebar list; the demo never does on its own
 }
 // "+ New analysis": back to the upload view.
 function showUpload() {
+  loadGeneration++;
   S.edf = null; S.file = null; S.demo = false; tour.stop(true);
   $('report').hidden = true; $('load').hidden = false;
   $('error').textContent = ''; $('file').value = '';
   scrollTo(0, 0);
 }
-function openDemo() { history.setActive(null); load(makeDemo(), { demo: true }); scrollTo(0, 0); tour.start(); $('tourAgain').hidden = true; }
+function openDemo() { loadGeneration++; history.setActive(null); load(makeDemo(), { demo: true }); scrollTo(0, 0); tour.start(); $('tourAgain').hidden = true; }
 $('tourAgain').onclick = openDemo; // a fresh demo: the tour needs the starter rules back
 $('file').onchange = (e) => e.target.files[0] && openFile(e.target.files[0]);
 $('drop').ondragover = (e) => { e.preventDefault(); $('drop').classList.add('over'); };
@@ -460,6 +465,7 @@ const history = mountHistory(supabase, {
   getFile: () => S.file ?? (S.demo ? demoFile() : null),
   getChecklist: () => S.checklist,
   onOpen: (record, buffer) => {
+    loadGeneration++;
     const edf = parseEDF(buffer);
     S.file = new File([buffer], record.filename, { type: 'application/edf' });
     load(edf, { name: record.filename, checklist: record.checklist });

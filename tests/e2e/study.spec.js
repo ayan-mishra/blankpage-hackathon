@@ -1,10 +1,61 @@
 import { test, expect } from '@playwright/test';
-import { mockBackend, login } from './helpers.js';
+import { mockBackend, login, session, user, edfFile } from './helpers.js';
+
+async function loginAsSecondUser(page) {
+  const next = { ...user, id: '00000000-0000-4000-8000-000000000002', email: 'second@example.com' };
+  await page.route('**/auth/v1/token?**', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ ...session(), user: next }) }));
+  await login(page);
+  await expect(page.locator('#accountEmail')).toHaveText(next.email);
+}
 
 test.beforeEach(async ({ page }) => {
   await mockBackend(page);
   // headless Chromium renders in software, so study.html shows its hardware-acceleration notice
   await page.addLocatorHandler(page.getByRole('button', { name: 'Continue anyway' }), (b) => b.click());
+});
+
+test('switching accounts clears study rows and cannot regrade the previous files', async ({ page }) => {
+  await page.goto('/study.html?sample');
+  await login(page);
+  await expect(page.locator('#progress')).toHaveText('Checked 8 recordings.');
+  await expect(page.locator('#table tbody tr:not(.group)')).toHaveCount(8);
+  await page.locator('#signOut').click();
+  await expect(page.locator('#authForm')).toBeVisible();
+  await loginAsSecondUser(page);
+  await expect(page.locator('#results')).toBeHidden();
+  await expect(page.locator('#table tbody')).toBeEmpty();
+  const rules = [{ id: 'flat', name: 'Flatline', metric: 'flat', op: '>', value: 0.5 }];
+  await page.locator('#importRules').setInputFiles({ name: 'c.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ rules })) });
+  await expect(page.locator('#results')).toBeHidden();
+  await expect(page.locator('#progress')).toBeEmpty();
+  await page.getByRole('button', { name: 'Try a sample study (8 participants)' }).click();
+  await expect(page.locator('#progress')).toHaveText('Checked 8 recordings.');
+});
+
+test('an EDF read finishing after logout cannot repopulate the next account’s study', async ({ page }) => {
+  await page.goto('/study.html');
+  await login(page);
+  const file = await edfFile(page, 'private-night.edf');
+  await page.evaluate(() => {
+    const read = File.prototype.arrayBuffer;
+    File.prototype.arrayBuffer = async function () {
+      window.studyReadStarted = true;
+      await new Promise(resolve => { window.finishStudyRead = resolve; });
+      const buffer = await read.call(this);
+      window.studyReadFinished = true;
+      return buffer;
+    };
+  });
+  await page.locator('#files').setInputFiles(file);
+  await expect.poll(() => page.evaluate(() => window.studyReadStarted)).toBe(true);
+  await page.locator('#signOut').click();
+  await expect(page.locator('#authForm')).toBeVisible();
+  await loginAsSecondUser(page);
+  await page.evaluate(() => window.finishStudyRead());
+  await expect.poll(() => page.evaluate(() => window.studyReadFinished)).toBe(true);
+  await expect(page.locator('#results')).toBeHidden();
+  await expect(page.locator('#table tbody')).toBeEmpty();
+  await expect(page.locator('#progress')).toBeEmpty();
 });
 
 test('a rule added in app.html grades the sample study, and reset goes back to the default', async ({ page }) => {

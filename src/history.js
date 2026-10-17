@@ -4,6 +4,7 @@
 // to this analysis" inserts a fresh copy and then deletes the old one.
 import { createAnalysisService } from './analysisStore.js';
 import { normalizeRules } from './checklists.js';
+import { isGuest, GUEST_OWNER } from './guest.js';
 import { formatDuration, formatRate, formatSaved, formatBytes, UPLOAD_LIMIT_BYTES } from './analyses.js';
 
 const sameRules = (a, b) => {
@@ -20,9 +21,10 @@ export function mountHistory(client, { getRecording, getFile, getChecklist, onOp
   const keepBox = $('keepRecording');
   const sidebar = $('sidebar');
   const toggle = $('sideToggle');
-  const service = createAnalysisService({ client });
+  const service = createAnalysisService({ client, localOwner: isGuest() ? GUEST_OWNER : null });
 
   let session = null;
+  let accountGeneration = 0;
   let busy = 0;
   let active = null; // the saved analysis shown in the main pane, if any
   let view = 0;      // bumps whenever the main pane changes, so a late save can't mark the wrong pane
@@ -81,9 +83,11 @@ export function mountHistory(client, { getRecording, getFile, getChecklist, onOp
   }
 
   async function render() {
+    const gen = accountGeneration;
     let items = [];
     try { items = await service.list(); }
     catch { setListStatus('Could not read your saved analyses.', true); return; }
+    if (gen !== accountGeneration) return;
     listEl.replaceChildren(...items.map(renderItem));
     listEl.hidden = !items.length;
     emptyEl.hidden = !!items.length;
@@ -94,16 +98,20 @@ export function mountHistory(client, { getRecording, getFile, getChecklist, onOp
 
   async function openAnalysis(rec) {
     if (busy) return;
+    const gen = accountGeneration;
     setDrawer(false);
     await work(async () => {
       setStatus(`Opening “${rec.filename}”…`);
       try {
         const { blob } = await service.open(rec.id);
+        if (gen !== accountGeneration) return;
         if (!blob) { setStatus('This analysis was saved without its recording, so it can’t be reopened.', true); return; }
-        onOpen(rec, await blob.arrayBuffer());
+        const buffer = await blob.arrayBuffer();
+        if (gen !== accountGeneration) return;
+        onOpen(rec, buffer);
         setActive(rec);
       } catch (err) {
-        setStatus(err?.message || 'Could not open this analysis.', true);
+        if (gen === accountGeneration) setStatus(err?.message || 'Could not open this analysis.', true);
       }
     });
   }
@@ -124,10 +132,12 @@ export function mountHistory(client, { getRecording, getFile, getChecklist, onOp
     const meta = getRecording();
     if (!meta) return;
     const mine = view;
+    const gen = accountGeneration;
     await work(async () => {
       setStatus(replace ? 'Saving rules…' : 'Saving…');
       try {
         const res = await service.save({ meta, file: getFile?.() ?? null, checklist: getChecklist?.() ?? [], keep: keepBox.checked });
+        if (gen !== accountGeneration) return;
         if (replace) {
           const { error } = await service.remove(replace.id);
           if (error) setListStatus('The old copy could not be removed from your account. Try Sync.', true);
@@ -138,7 +148,7 @@ export function mountHistory(client, { getRecording, getFile, getChecklist, onOp
         if (res.tooBig) setStatus(`Saved without the recording: it’s larger than ${formatBytes(UPLOAD_LIMIT_BYTES)}.`, true);
         else if (res.error) setStatus('Saved in this browser. It will sync to your account next time.', true);
         else if (res.storageError) setStatus('Saved, but the recording could not be stored.', true);
-        else setStatus(replace ? 'Rules saved to this analysis.' : 'Saved to your analyses.');
+        else setStatus(isGuest() ? 'Saved in this browser.' : replace ? 'Rules saved to this analysis.' : 'Saved to your analyses.');
       } catch (err) {
         if (mine === view) setStatus(err?.message || 'Could not save this analysis.', true);
       }
@@ -168,7 +178,10 @@ export function mountHistory(client, { getRecording, getFile, getChecklist, onOp
       const changed = session?.user?.id !== next?.user?.id;
       session = next;
       service.setSession(next);
-      if (changed) active = null;
+      if (changed) {
+        active = null; accountGeneration++;
+        listEl.replaceChildren(); listEl.hidden = true; emptyEl.hidden = false;
+      }
       if (changed || event === 'INITIAL_SESSION') {
         // Database work runs outside the auth callback so token refresh can finish.
         setTimeout(() => { if (changed && next) runSync(); else render(); }, 0);
@@ -177,6 +190,7 @@ export function mountHistory(client, { getRecording, getFile, getChecklist, onOp
     });
   }
 
+  if (isGuest() && !service.persistent) setListStatus('Browser storage is unavailable. Guest analyses last only until this tab closes.', true);
   render();
   return {
     refresh: sync,

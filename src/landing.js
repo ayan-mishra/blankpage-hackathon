@@ -4,6 +4,7 @@ import { stripChart } from './strip.js';
 import { DEFAULT_CHECKLIST, evaluate, verdict, explain, proposeRule } from './rules.js';
 import { supabase } from './supabase.js';
 import { submitAuth } from './auth.js';
+import { isGuest, setGuest } from './guest.js';
 
 // ---- hero account: the app pages need an account, so signed-out links into them stop here
 // at the sign-in form and remember where the visitor was going.
@@ -21,21 +22,27 @@ import { submitAuth } from './auth.js';
     form.hidden = !supabase || !!session;
     $('heroSignedIn').hidden = !session;
     $('heroWho').textContent = session?.user.email ?? '';
-    $('demoNote').textContent = session ? 'You’re signed in, so both open straight away.' : 'Both open after you sign in.';
+    $('demoNote').textContent = session ? 'You’re signed in, so both open straight away.' : isGuest() ? 'Both open in guest mode on this device.' : 'Sign in or continue as guest to open either.';
     form.querySelectorAll('button').forEach((b) => { b.disabled = busy; });
     $('heroSignOut').disabled = busy;
+    $('heroGuest').hidden = !!session;
   };
   const what = { '?demo': 'the demo recording', '?sample': 'the sample study' };
   document.addEventListener('click', (event) => {
     const link = event.target.closest?.('a[href]');
-    if (session || !link || !/^(app|study)\.html/.test(link.getAttribute('href'))) return;
+    if (session || isGuest() || !link || !/^(app|study)\.html/.test(link.getAttribute('href'))) return;
     event.preventDefault();
     next = appPath(link.href);
     if (!supabase) { status.focus(); return; }
     say(`Sign in or create an account to open ${what[new URL(link.href).search] ?? 'Somnium'}.`);
     email.focus();
   });
-  if (!supabase) say('Accounts aren’t configured on this copy of Somnium, so the app can’t open.', true);
+  $('heroGuest').onclick = () => {
+    try { setGuest(true); location.assign(next); }
+    catch { say('Allow browser storage to continue as a guest.', true); }
+  };
+  if (isGuest()) say('Guest mode. Your work stays on this device.');
+  else if (!supabase) say('Accounts aren’t configured on this copy of Somnium. Continue as guest to use the app.', true);
   else {
     supabase.auth.onAuthStateChange((_event, s) => { session = s; render(); });
     form.onsubmit = async (event) => {

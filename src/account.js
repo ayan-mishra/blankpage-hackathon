@@ -1,5 +1,6 @@
 import { normalizeRules, checklistName } from './checklists.js';
 import { NEXT_KEY, submitAuth } from './auth.js';
+import { isGuest, setGuest } from './guest.js';
 
 const here = () => location.pathname + location.search;
 function takeIntent() {
@@ -21,8 +22,24 @@ export function mountAccount(client, { getRules, setRules, onSignedIn, onSignedO
     el.textContent = message;
     el.classList.toggle('error', error);
   });
+  $('continueGuest').onclick = () => {
+    try { setGuest(true); location.reload(); }
+    catch { status('Allow browser storage to continue as a guest.', true); }
+  };
+  if (isGuest()) {
+    $('gate').hidden = true; $('appShell').hidden = false;
+    $('accountEmail').textContent = 'Guest · this browser';
+    $('signOut').textContent = 'Use an account';
+    $('signOut').onclick = () => { setGuest(false); location.reload(); };
+    if ($('syncAnalyses')) $('syncAnalyses').hidden = true;
+    if ($('cloud')) $('cloud').hidden = true;
+    status('Guest mode. Analyses and recordings stay in this browser.');
+    const intent = takeIntent();
+    if (intent !== null) onSignedIn?.(intent);
+    return;
+  }
   if (!client) {
-    status('Accounts are not configured on this copy of Somnium, so the app can’t open. Whoever runs this site needs to add its Supabase URL and publishable key.', true);
+    status('Accounts are not configured on this copy of Somnium. Continue as guest to save on this device.', true);
     return;
   }
   const cloud = $('cloud'); // saved checklists live only on app.html
@@ -60,6 +77,8 @@ export function mountAccount(client, { getRules, setRules, onSignedIn, onSignedO
   }
   client.auth.onAuthStateChange((event, next) => {
     const changed = session?.user.id !== next?.user.id;
+    // Clear the old user's page before revealing another account, including cross-tab switches.
+    if (changed && session) onSignedOut?.();
     session = next;
     ready = true;
     if (event === 'PASSWORD_RECOVERY') recovery = true;
@@ -67,12 +86,12 @@ export function mountAccount(client, { getRules, setRules, onSignedIn, onSignedO
     if (changed || event === 'INITIAL_SESSION') {
       generation++;
       saved = [];
-      status(session ? (recovery ? 'Choose a new password.' : 'Loading your checklists…') : 'Sign in or create an account to open Somnium.');
+      status(session ? (recovery ? 'Choose a new password.' : 'Loading your checklists…') : 'Sign in, create an account, or continue as guest.');
       const version = generation;
       // Run database requests and page work outside the auth callback so token refresh can finish.
       setTimeout(() => {
         if (version !== generation) return;
-        if (!session) { onSignedOut?.(); return; }
+        if (!session) return;
         if (intent === undefined) intent = takeIntent();
         if (intent === null) return; // redirecting to the page the visitor started from
         onSignedIn?.(intent);

@@ -75,6 +75,31 @@ function fakeClient(initial = []) {
 
 const blob = (bytes = 32) => new Blob([new Uint8Array(bytes)]);
 
+test('a guest recording remains browser-only after an account signs in', async () => {
+  const backend = memoryBackend();
+  const guest = createAnalysisService({ backend, client: null, localOwner: 'browser-guest' });
+  const saved = await guest.save({ meta, file: blob(16) });
+  assert.equal(saved.record.owner, 'browser-guest');
+  assert.equal((await guest.open(saved.record.id)).blob.size, 16);
+  const client = fakeClient();
+  const account = createAnalysisService({ backend, client });
+  account.setSession({ user: { id: uid } });
+  await account.sync();
+  assert.equal((await account.list()).length, 0);
+  assert.equal(client.rows.length, 0);
+  assert.equal(client.storage.objects.size, 0);
+  assert.equal((await guest.list()).length, 1);
+});
+
+test('guest save reports when the browser cannot store the recording', async () => {
+  const backend = memoryBackend();
+  backend.putRecording = async () => { throw new Error('Storage full'); };
+  const guest = createAnalysisService({ backend, client: null, localOwner: 'browser-guest' });
+  const saved = await guest.save({ meta, file: blob(16) });
+  assert.match(saved.storageError.message, /Storage full/);
+  assert.equal(saved.synced, false);
+});
+
 test('buildAnalysis keeps metadata, checklist and storage fields', () => {
   const rec = buildAnalysis(
     { ...meta, labels: ['F3'], signals: [1, 2, 3] },
@@ -189,7 +214,50 @@ test('signed-in save uploads the recording and records its path', async () => {
   assert.equal(client.rows.length, 1);
   assert.equal(client.rows[0].storage_path, `${uid}/${saved.record.id}.edf`);
   assert.equal(client.rows[0].size_bytes, 128);
+  assert.equal(client.rows[0].user_id, uid, 'RLS must check the captured owner, not default to the latest session');
   assert.equal(client.rows[0].checklist.length, DEFAULT_CHECKLIST.length);
+});
+
+for (const phase of ['put', 'putRecording', 'upload']) {
+  test(`a save stops cloud writes after an account switch during ${phase}`, async () => {
+    const client = fakeClient();
+    const backend = memoryBackend();
+    const service = createAnalysisService({ client, backend });
+    service.setSession({ user: { id: uid } });
+    const switchAccount = () => service.setSession({ user: { id: '00000000-0000-4000-8000-000000000002' } });
+    if (phase === 'upload') {
+      const from = client.storage.from;
+      client.storage.from = bucket => {
+        const api = from(bucket), upload = api.upload;
+        api.upload = async (...args) => { const result = await upload(...args); switchAccount(); return result; };
+        return api;
+      };
+    } else {
+      const original = backend[phase];
+      backend[phase] = async (...args) => { await original(...args); switchAccount(); };
+    }
+    const result = await service.save({ meta, file: blob(16) });
+    assert.equal(result.synced, false);
+    assert.equal(client.rows.length, 0);
+    assert.equal(client.storage.objects.size, phase === 'upload' ? 1 : 0);
+    assert.equal((await service.list()).length, 0, 'B cannot see A’s local copy');
+    assert.equal((await backend.all())[0].owner, uid);
+  });
+}
+
+test('sync does not push A’s pending rows after switching during the local read', async () => {
+  const client = fakeClient();
+  const backend = memoryBackend([buildAnalysis(meta, { owner: uid })]);
+  const service = createAnalysisService({ client, backend });
+  service.setSession({ user: { id: uid } });
+  const all = backend.all;
+  backend.all = async () => {
+    const rows = await all();
+    service.setSession({ user: { id: '00000000-0000-4000-8000-000000000002' } });
+    return rows;
+  };
+  await service.sync();
+  assert.equal(client.rows.length, 0);
 });
 
 test('a recording over the plan limit is skipped but the details are saved', async () => {

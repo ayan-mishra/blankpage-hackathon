@@ -2,6 +2,31 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseEDF } from '../src/edf.js';
 import { makeEdf } from './makeEdf.js';
+import { windowMetrics } from '../src/metrics.js';
+import { DEFAULT_CHECKLIST, evaluate, verdict } from '../src/rules.js';
+
+test('equivalent voltage units produce the same samples and verdict', () => {
+  const data = Float32Array.from({ length: 1000 }, (_, i) => 100 * Math.sin(2 * Math.PI * 10 * i / 100));
+  const original = makeEdf([{ label: 'EEG', fs: 100, data }], 10);
+  const reference = parseEDF(original).signals[0];
+  for (const [unit, range] of [['uV', 500], ['µV', 500], ['mV', 0.5], ['V', 0.0005], ['nV', 500000]]) {
+    const bytes = new Uint8Array(original.slice(0));
+    const put = (off, value) => bytes.set(Array.from(String(value).padEnd(8), c => c.charCodeAt(0)), off);
+    put(256 + 96, unit); put(256 + 104, -range); put(256 + 112, range);
+    const signal = parseEDF(bytes.buffer).signals[0];
+    for (let i = 0; i < signal.length; i++) assert.ok(Math.abs(signal[i] - reference[i]) < 0.001, unit);
+    const by = [windowMetrics(signal, 100, 5)];
+    assert.equal(verdict(evaluate(DEFAULT_CHECKLIST, by), by).label, 'usable', unit);
+  }
+});
+
+test('rejects missing or unsupported physical units rather than guessing microvolts', () => {
+  for (const unit of ['', 'Ohm', '%']) {
+    const bytes = new Uint8Array(makeEdf([{ label: 'EEG', fs: 10, data: new Float32Array(20) }], 2));
+    bytes.set(Array.from(unit.padEnd(8), c => c.charCodeAt(0)), 256 + 96);
+    assert.throws(() => parseEDF(bytes.buffer), /unsupported physical unit/i);
+  }
+});
 
 test('parses labels, rates, samples; skips EDF Annotations', () => {
   const a = Float32Array.from({ length: 400 }, (_, i) => 100 * Math.sin(i / 10));

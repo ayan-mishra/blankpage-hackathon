@@ -48,12 +48,16 @@ export function parseEDF(arrayBuffer) {
       plan.push({ spr }); // parsed for length, omitted from output
       continue;
     }
+    const unit = at(i, 2).trim();
+    const factor = { uV: 1, 'µV': 1, mV: 1000, V: 1000000, nV: 0.001 }[unit];
+    if (!Number.isFinite(factor)) throw new Error(`EDF: unsupported physical unit "${unit}" for ${label}; expected a voltage unit`);
     const out = new Float32Array(numRecords * spr);
-    const pmin = Number(at(i, 3));
+    // All amplitude rules and traces use microvolts, regardless of the EDF's units.
+    const pmin = Number(at(i, 3)) * factor;
     const dmin = Number(at(i, 5));
     plan.push({
       spr, out, pmin, dmin,
-      scale: (Number(at(i, 4)) - pmin) / (Number(at(i, 6)) - dmin),
+      scale: (Number(at(i, 4)) * factor - pmin) / (Number(at(i, 6)) - dmin),
     });
     labels.push(label);
     rates.push(spr / recordDuration);

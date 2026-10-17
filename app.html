@@ -13,7 +13,7 @@
 <section id="gate" class="gate" aria-labelledby="gateTitle">
   <div class="card gate-card">
     <h1 id="gateTitle"><a href="./">Somnium</a></h1>
-    <p class="gate-lead">Check EEG recordings and keep every analysis in your account. Sign in or create an account to open the app.</p>
+    <p class="gate-lead">Check EEG recordings. Sign in to save to your account, or continue as guest to save on this device.</p>
     <form id="authForm" hidden>
       <label>Email<input id="email" type="email" autocomplete="email" required maxlength="254"></label>
       <label>Password<input id="password" type="password" autocomplete="current-password" required maxlength="128"></label>
@@ -23,6 +23,7 @@
         <button id="forgotPassword" name="action" value="reset" class="ghost">Send password reset</button>
       </div>
     </form>
+    <button id="continueGuest" type="button" class="ghost">Continue as guest</button>
     <form id="recoveryForm" hidden>
       <label>New password<input id="newPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label>
       <button>Update password</button>
