@@ -1,5 +1,6 @@
 import { makeDemo } from './demo.js';
 import { windowMetrics } from './metrics.js';
+import './gpu.js';
 import { stripChart } from './strip.js';
 import { DEFAULT_CHECKLIST, evaluate, verdict, explain } from './rules.js';
 

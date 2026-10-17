@@ -5,11 +5,26 @@ import { parseEDF } from './edf.js';
 import { windowMetrics } from './metrics.js';
 import { METRICS, DEFAULT_CHECKLIST, evaluate, verdict, explain, fmt, parseRule, proposeRule } from './rules.js';
 import { makeDemo } from './demo.js';
+import { mapLayout, GUT, TOP, ROW } from './map.js';
 
 const WIN = 5; // seconds per window
 const $ = (id) => document.getElementById(id);
-const S = { edf: null, by: [], checklist: [...DEFAULT_CHECKLIST], flags: [], preview: new Set(), sel: null, cell: null, rule: null };
-const GUT = 44, TOP = 20, ROW = 30;
+const S = { edf: null, by: [], checklist: [...DEFAULT_CHECKLIST], flags: [], preview: new Set(), sel: null, cell: null, rule: null, step: 1, cols: 0 };
+
+// A drawn column may cover S.step windows (long recordings aggregate; see map.js).
+const colOf = (win) => Math.floor(win / S.step);
+const firstWinOf = (col) => col * S.step;
+const endWinOf = (col) => Math.min(S.by[0].length, (col + 1) * S.step);
+const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+const hhmm = (s) => { const m = Math.round(s / 60); return m >= 60 ? `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}` : `${m}m`; };
+
+// Which window a clicked cell stands for: the earliest flagged one, so clicking a
+// red cell lands on the evidence that made it red.
+function repWin(ch, col) {
+  const w0 = firstWinOf(col), w1 = endWinOf(col);
+  const flagged = S.flags.find((f) => f.ch === ch && f.win >= w0 && f.win < w1);
+  return flagged ? flagged.win : w0;
+}
 
 function load(edf) {
   S.edf = edf;
@@ -33,26 +48,29 @@ function refresh() {
 }
 
 function drawMap() {
-  const c = $('map'), n = S.by[0].length, cw = Math.max(10, Math.floor(920 / n));
-  const w = GUT + n * cw, h = TOP + S.by.length * ROW, d = devicePixelRatio || 1;
-  c.width = w * d; c.height = h * d; c.style.width = w + 'px'; c.style.height = h + 'px';
-  const g = c.getContext('2d'); g.scale(d, d);
+  const c = $('map');
+  const L = mapLayout(S.by[0].length, S.by.length, devicePixelRatio || 1);
+  S.step = L.step; S.cols = L.cols;
+  c.width = L.pxW; c.height = L.pxH; c.style.width = L.cssW + 'px'; c.style.height = L.cssH + 'px';
+  const g = c.getContext('2d'); g.scale(L.scale, L.scale);
+  const cw = L.cw;
   const css = (v) => getComputedStyle(document.body).getPropertyValue(v);
   const count = new Map();
-  S.flags.forEach((f) => count.set(`${f.ch}:${f.win}`, (count.get(`${f.ch}:${f.win}`) || 0) + 1));
+  S.flags.forEach((f) => { const k = `${f.ch}:${colOf(f.win)}`; count.set(k, (count.get(k) || 0) + 1); });
   g.font = '12px system-ui'; g.fillStyle = css('--mute'); g.textBaseline = 'middle';
   S.edf.labels.forEach((l, i) => g.fillText(l.slice(0, 6), 2, TOP + i * ROW + ROW / 2));
-  for (let k = 0; k < n; k += Math.ceil(60 / WIN)) g.fillText(`${(k * WIN) / 60}m`, GUT + k * cw, 8);
-  for (let ch = 0; ch < S.by.length; ch++) for (let wi = 0; wi < n; wi++) {
-    const key = `${ch}:${wi}`, x = GUT + wi * cw, y = TOP + ch * ROW;
+  const every = Math.max(1, Math.ceil(40 / cw)); // keep time labels apart
+  for (let col = 0; col < S.cols; col += every) g.fillText(hhmm(col * S.step * WIN), GUT + col * cw, 8);
+  for (let ch = 0; ch < S.by.length; ch++) for (let col = 0; col < S.cols; col++) {
+    const key = `${ch}:${col}`, x = GUT + col * cw, y = TOP + ch * ROW;
     g.fillStyle = count.has(key) ? css('--bad') : css('--ok');
     g.fillRect(x + 1, y + 1, cw - 2, ROW - 2);
     if (S.preview.has(key)) { g.fillStyle = css('--pre'); g.fillRect(x + 1, y + ROW / 2, cw - 2, ROW / 2 - 1); }
   }
   g.lineWidth = 2; g.strokeStyle = css('--text');
-  if (S.sel) g.strokeRect(GUT + S.sel.w0 * cw, TOP + S.sel.c0 * ROW, (S.sel.w1 - S.sel.w0 + 1) * cw, (S.sel.c1 - S.sel.c0 + 1) * ROW);
-  else if (S.cell) g.strokeRect(GUT + S.cell.win * cw, TOP + S.cell.ch * ROW, cw, ROW);
-  c._cw = cw;
+  if (S.sel) g.strokeRect(GUT + S.sel.col0 * cw, TOP + S.sel.ch0 * ROW, (S.sel.col1 - S.sel.col0 + 1) * cw, (S.sel.ch1 - S.sel.ch0 + 1) * ROW);
+  else if (S.cell) g.strokeRect(GUT + colOf(S.cell.win) * cw, TOP + S.cell.ch * ROW, cw, ROW);
+  c._cw = cw; c._w = L.cssW; c._h = L.cssH;
 }
 
 function drawEvidence() {
@@ -60,7 +78,10 @@ function drawEvidence() {
   t.clearRect(0, 0, 9999, 9999);
   if (!S.cell) return box.replaceChildren(Object.assign(document.createElement('p'), { className: 'hint', textContent: 'Select a cell on the map.' }));
   const { ch, win } = S.cell, hits = S.flags.filter((f) => f.ch === ch && f.win === win);
-  const lines = hits.length ? hits.map((f) => explain(f, S.edf.labels, WIN)) : [`${S.edf.labels[ch]}: no rule flagged this window.`];
+  const lines = hits.length ? hits.map((f) => explain(f, S.edf.labels, WIN)) : [`${S.edf.labels[ch]}: no rule flagged this cell.`];
+  if (S.step > 1) {
+    lines.push(`This cell covers ${S.step} windows (${mmss(win * WIN)}–${mmss((win + S.step) * WIN)}); the trace shows one window.`);
+  }
   const m = S.by[ch][win];
   lines.push('Metrics: ' + Object.keys(METRICS).map((k) => `${METRICS[k].label} ${fmt(k, m[k])}`).join(' · '));
   box.replaceChildren(...lines.map((l) => Object.assign(document.createElement('p'), { textContent: l })));
@@ -85,22 +106,27 @@ function drawChecklist() {
 }
 
 // ---- map interaction: click = inspect, drag = select region to teach from
+// Canvas pixels are CSS-scaled by `max-width:100%`, so convert client coords back
+// to canvas coords before hit-testing (otherwise clicks land in the wrong cell).
 const hit = (e) => {
   const c = $('map'), r = c.getBoundingClientRect();
-  const win = Math.floor((e.clientX - r.left - GUT) / c._cw), ch = Math.floor((e.clientY - r.top - TOP) / ROW);
-  return win >= 0 && ch >= 0 && win < S.by[0].length && ch < S.by.length ? { ch, win } : null;
+  if (!r.width || !r.height) return null;
+  const x = (e.clientX - r.left) * ((c._w || r.width) / r.width);
+  const y = (e.clientY - r.top) * ((c._h || r.height) / r.height);
+  const col = Math.floor((x - GUT) / (c._cw || 10)), ch = Math.floor((y - TOP) / ROW);
+  return col >= 0 && ch >= 0 && col < S.cols && ch < S.by.length ? { ch, col, win: repWin(ch, col) } : null;
 };
 let anchor = null;
 $('map').onpointerdown = (e) => { anchor = hit(e); if (anchor) $('map').setPointerCapture(e.pointerId); };
 $('map').onpointermove = (e) => {
   const h = anchor && hit(e); if (!h) return;
-  S.sel = { c0: Math.min(anchor.ch, h.ch), c1: Math.max(anchor.ch, h.ch), w0: Math.min(anchor.win, h.win), w1: Math.max(anchor.win, h.win) };
+  S.sel = { ch0: Math.min(anchor.ch, h.ch), ch1: Math.max(anchor.ch, h.ch), col0: Math.min(anchor.col, h.col), col1: Math.max(anchor.col, h.col) };
   S.cell = null; $('teach').disabled = false; $('teachHint').textContent = 'Region selected. Click “Teach from selection”.';
   drawMap(); drawEvidence();
 };
 $('map').onpointerup = (e) => {
   const h = hit(e);
-  if (anchor && h && h.ch === anchor.ch && h.win === anchor.win) { S.sel = null; S.cell = h; $('teach').disabled = true; $('teachHint').textContent = 'Drag across the map first.'; drawMap(); drawEvidence(); }
+  if (anchor && h && h.ch === anchor.ch && h.col === anchor.col) { S.sel = null; S.cell = h; $('teach').disabled = true; $('teachHint').textContent = 'Drag across the map first.'; drawMap(); drawEvidence(); }
   anchor = null;
 };
 
@@ -119,7 +145,7 @@ function readProposal() {
 function updatePreview() {
   S.rule = readProposal();
   const f = evaluate([S.rule], S.by);
-  S.preview = new Set(f.map((x) => `${x.ch}:${x.win}`));
+  S.preview = new Set(f.map((x) => `${x.ch}:${colOf(x.win)}`));
   $('pCount').textContent = `Would flag ${f.length} channel-windows (${new Set(f.map((x) => x.ch)).size} channels).`;
   drawMap();
 }
@@ -134,7 +160,9 @@ $('ruleGo').onclick = () => {
 };
 $('teach').onclick = () => {
   const cells = [];
-  for (let c = S.sel.c0; c <= S.sel.c1; c++) for (let w = S.sel.w0; w <= S.sel.w1; w++) cells.push({ ch: c, win: w });
+  for (let c = S.sel.ch0; c <= S.sel.ch1; c++) for (let col = S.sel.col0; col <= S.sel.col1; col++) {
+    for (let w = firstWinOf(col); w < endWinOf(col); w++) cells.push({ ch: c, win: w });
+  }
   const r = proposeRule(S.by, cells);
   if (!r) { $('ruleError').textContent = 'No single metric separates that region from the rest. Try selecting a tighter region.'; return; }
   $('ruleError').textContent = 'Proposed from your example. Check the preview and adjust the threshold.'; showProposal(r);
