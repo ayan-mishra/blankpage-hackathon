@@ -164,3 +164,4 @@ $('drop').ondragover = (e) => { e.preventDefault(); $('drop').classList.add('ove
 $('drop').ondragleave = () => $('drop').classList.remove('over');
 $('drop').ondrop = (e) => { e.preventDefault(); $('drop').classList.remove('over'); e.dataTransfer.files[0] && openFile(e.dataTransfer.files[0]); };
 $('demo').onclick = () => load(makeDemo());
+if (new URLSearchParams(location.search).has('demo')) load(makeDemo());

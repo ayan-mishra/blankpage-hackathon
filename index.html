@@ -3,65 +3,75 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Somnium · EEG recording trust check</title>
-<link rel="stylesheet" href="style.css">
+<title>Somnium · Can you trust this night of sleep?</title>
+<meta name="description" content="Somnium checks EEG recordings before you analyze them, with plain-English evidence and rules you write yourself. Runs in your browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="landing.css">
 </head>
 <body>
-<header>
-  <h1>Somnium</h1>
-  <p class="tag">Describe your standard. See what passes.</p>
-</header>
-<main>
-  <section id="load" class="card">
-    <label class="drop" id="drop">
-      <input type="file" id="file" accept=".edf,.EDF" hidden>
-      <strong>Drop an EDF recording</strong> or click to choose
-      <span>Everything runs in your browser. Nothing is uploaded.</span>
-    </label>
-    <button id="demo" class="ghost">Try the demo recording</button>
-    <p id="error" role="alert"></p>
-  </section>
+<nav>
+  <a class="mark" href="./">Somnium</a>
+  <a class="navlink" href="app.html">Open the app</a>
+</nav>
 
-  <section id="report" hidden>
-    <div id="verdict" class="card"></div>
+<div class="story">
+  <div class="steps">
+    <section class="step" data-step="0">
+      <h1>Can you trust this night of sleep?</h1>
+      <p class="lead">Somnium checks an EEG recording before you analyze it, so you know which nights to keep.</p>
+      <p class="for">Made for first-time EEG researchers and sleep labs working with home-headband recordings.</p>
+      <p class="actions"><a class="btn" href="app.html?demo">Try the demo recording</a><a class="plain" href="#how">See how it works</a></p>
+    </section>
 
-    <div class="card">
-      <div class="row-head"><h2>Recording map</h2><span class="hint">Click a cell for evidence · drag across cells to teach a rule</span></div>
-      <div id="mapwrap"><canvas id="map"></canvas></div>
-      <div class="legend"><i class="ok"></i>clean <i class="bad"></i>flagged <i class="pre"></i>would be flagged by the rule you’re previewing</div>
-    </div>
+    <section class="step" id="how" data-step="1">
+      <h2>Forty recordings. Nobody told you which ones are usable.</h2>
+      <p>Home headbands lose contact, pick up mains hum and drop out. In a 2026 preprint of 100 home recordings, about one in four was degraded or lost entirely.</p>
+      <p>You usually find out after the analysis, or never. <a href="https://www.medrxiv.org/content/10.64898/2026.06.01.26354591v1.full.pdf">Source: medRxiv preprint</a></p>
+    </section>
 
-    <div class="grid">
-      <div class="card">
-        <h2>Evidence</h2>
-        <div id="evidence"><p class="hint">Select a cell on the map.</p></div>
-        <canvas id="trace" height="120"></canvas>
+    <section class="step" data-step="2">
+      <h2>Drop in the file. It’s read right here, in your browser.</h2>
+      <p>Somnium scans every channel in five-second windows and marks what looks wrong. Nothing is uploaded.</p>
+    </section>
+
+    <section class="step" data-step="3">
+      <h2>Every mark comes with its reason.</h2>
+      <p>Click a mark to see the measurement, the rule that tripped, and what usually causes it. You can check the reasoning instead of trusting a score.</p>
+    </section>
+
+    <section class="step" data-step="4">
+      <h2>Your lab’s standard, written your way.</h2>
+      <p>Type a rule in plain words. Or drag across a stretch you know is bad and let Somnium propose the threshold. Or tune the numbers yourself. Each rule shows what it would flag before you add it.</p>
+    </section>
+
+    <section class="step" data-step="5">
+      <h2>A verdict you can defend. A checklist you can share.</h2>
+      <p>Save your rules as a file, run the same standard on the next recording, or hand it to the next student.</p>
+    </section>
+  </div>
+
+  <div class="stagewrap">
+    <div class="stage" id="stage" data-step="0" aria-hidden="true">
+      <svg id="chart" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet"></svg>
+      <div class="callout" id="callout"></div>
+      <div class="composer" id="composer">
+        <p><b>Say it</b> “flag 60 Hz hum above 15%”</p>
+        <p><b>Show it</b> drag across the spikes → <i>spikiness above 39</i></p>
+        <p><b>Tune it</b> change the number, watch the marks</p>
       </div>
-
-      <div class="card">
-        <h2>Add a rule</h2>
-        <div class="row"><input id="ruleText" placeholder="e.g. flag 60 Hz hum above 15%" aria-label="Describe a rule"><button id="ruleGo">Preview</button></div>
-        <div class="row"><button id="teach" class="ghost" disabled>Teach from selection</button><span class="hint" id="teachHint">Drag across the map first.</span></div>
-        <div id="proposal" hidden>
-          <div class="row">
-            <select id="pMetric"></select>
-            <select id="pOp"><option>&gt;</option><option>&lt;</option></select>
-            <input id="pValue" type="number" step="any">
-          </div>
-          <p id="pCount" class="hint"></p>
-          <div class="row"><button id="pAdd">Add to checklist</button><button id="pCancel" class="ghost">Cancel</button></div>
-        </div>
-        <p id="ruleError" class="hint"></p>
-      </div>
+      <div class="stamp" id="stamp"></div>
     </div>
+  </div>
+</div>
 
-    <div class="card">
-      <div class="row-head"><h2>Checklist</h2>
-        <span><button id="export" class="ghost">Export</button> <label class="ghost btn">Import<input type="file" id="import" accept=".json" hidden></label></span></div>
-      <ul id="checklist"></ul>
-    </div>
-  </section>
-</main>
-<script type="module" src="src/app.js"></script>
+<section class="finale">
+  <h2>Try it on a demo recording.</h2>
+  <p>Six channels, five minutes, three known faults. Or drop in your own EDF file.</p>
+  <p class="actions"><a class="btn" href="app.html?demo">Open the demo</a><a class="plain" href="app.html">Drop your own EDF</a></p>
+  <p class="fine">Runs entirely in your browser. Not for clinical use. Checks are not yet validated against PREP.</p>
+</section>
+<script type="module" src="src/landing.js"></script>
 </body>
 </html>

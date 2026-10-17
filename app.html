@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Somnium · EEG recording trust check</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1><a href="./" style="color:inherit;text-decoration:none">Somnium</a></h1>
+  <p class="tag">Describe your standard. See what passes.</p>
+</header>
+<main>
+  <section id="load" class="card">
+    <label class="drop" id="drop">
+      <input type="file" id="file" accept=".edf,.EDF" hidden>
+      <strong>Drop an EDF recording</strong> or click to choose
+      <span>Everything runs in your browser. Nothing is uploaded.</span>
+    </label>
+    <button id="demo" class="ghost">Try the demo recording</button>
+    <p id="error" role="alert"></p>
+  </section>
+
+  <section id="report" hidden>
+    <div id="verdict" class="card"></div>
+
+    <div class="card">
+      <div class="row-head"><h2>Recording map</h2><span class="hint">Click a cell for evidence · drag across cells to teach a rule</span></div>
+      <div id="mapwrap"><canvas id="map"></canvas></div>
+      <div class="legend"><i class="ok"></i>clean <i class="bad"></i>flagged <i class="pre"></i>would be flagged by the rule you’re previewing</div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Evidence</h2>
+        <div id="evidence"><p class="hint">Select a cell on the map.</p></div>
+        <canvas id="trace" height="120"></canvas>
+      </div>
+
+      <div class="card">
+        <h2>Add a rule</h2>
+        <div class="row"><input id="ruleText" placeholder="e.g. flag 60 Hz hum above 15%" aria-label="Describe a rule"><button id="ruleGo">Preview</button></div>
+        <div class="row"><button id="teach" class="ghost" disabled>Teach from selection</button><span class="hint" id="teachHint">Drag across the map first.</span></div>
+        <div id="proposal" hidden>
+          <div class="row">
+            <select id="pMetric"></select>
+            <select id="pOp"><option>&gt;</option><option>&lt;</option></select>
+            <input id="pValue" type="number" step="any">
+          </div>
+          <p id="pCount" class="hint"></p>
+          <div class="row"><button id="pAdd">Add to checklist</button><button id="pCancel" class="ghost">Cancel</button></div>
+        </div>
+        <p id="ruleError" class="hint"></p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row-head"><h2>Checklist</h2>
+        <span><button id="export" class="ghost">Export</button> <label class="ghost btn">Import<input type="file" id="import" accept=".json" hidden></label></span></div>
+      <ul id="checklist"></ul>
+    </div>
+  </section>
+</main>
+<script type="module" src="src/app.js"></script>
+</body>
+</html>
