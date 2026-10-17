@@ -20,10 +20,12 @@
 <div class="shell">
   <aside id="history" class="card" aria-labelledby="historyHeading">
     <div class="row-head"><h2 id="historyHeading">Previous analyses</h2></div>
-    <div class="row history-actions">
+    <div class="row">
       <button id="saveAnalysis" type="button" disabled>Save analysis</button>
       <button id="syncAnalyses" type="button" class="ghost" disabled title="Sync with your account">Sync</button>
     </div>
+    <label class="keep-recording"><input type="checkbox" id="keepRecording" checked> Keep the recording so it can be reopened</label>
+    <p class="hint" id="recordingLimit"></p>
     <p class="hint" id="historyStatus" aria-live="polite">No analyses saved yet.</p>
     <p class="hint" id="historyEmpty">Load a recording, then save it here to build your history.</p>
     <ul id="historyList" hidden></ul>

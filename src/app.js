@@ -4,15 +4,16 @@ import { normalizeRules } from './checklists.js';
 import { parseEDF } from './edf.js';
 import { windowMetrics } from './metrics.js';
 import { METRICS, DEFAULT_CHECKLIST, evaluate, verdict, explain, fmt, parseRule, proposeRule } from './rules.js';
-import { makeDemo } from './demo.js';
+import { demoFile } from './demo.js';
 import { mapLayout, GUT, TOP, ROW } from './map.js';
 import { mountHistory } from './history.js';
 
 const WIN = 5; // seconds per window
 const $ = (id) => document.getElementById(id);
-const S = { edf: null, name: '', by: [], checklist: [...DEFAULT_CHECKLIST], flags: [], preview: new Set(), sel: null, cell: null, rule: null, step: 1, cols: 0 };
+const S = { edf: null, name: '', file: null, by: [], checklist: [...DEFAULT_CHECKLIST], flags: [], preview: new Set(), sel: null, cell: null, rule: null, step: 1, cols: 0 };
 
-// Metadata for the history sidebar. Only these fields are stored, never the recording.
+// Metadata for the history sidebar. The recording itself is stored separately,
+// and only when the user asks to keep it.
 const RECORDING_NAME = 200;
 const cleanName = (name) => {
   const trimmed = typeof name === 'string' ? name.trim() : '';
@@ -40,9 +41,11 @@ function repWin(ch, col) {
   return flagged ? flagged.win : w0;
 }
 
-function load(edf, name = '') {
+function load(edf, name = '', checklist = null) {
   S.edf = edf;
   S.name = cleanName(name);
+  // Reopening an analysis restores the exact rules it was saved with.
+  if (Array.isArray(checklist)) S.checklist = checklist.map((r) => ({ ...r }));
   S.by = edf.signals.map((x, i) => windowMetrics(x, edf.rates[i], WIN));
   const n = Math.min(...S.by.map((w) => w.length));
   S.by = S.by.map((w) => w.slice(0, n));
@@ -201,19 +204,34 @@ $('import').onchange = async (e) => {
 };
 
 // ---- loading
+// Every recording keeps its File so a saved analysis can store (and reopen) it.
 async function openFile(f) {
   $('error').textContent = '';
-  try { load(parseEDF(await f.arrayBuffer()), f.name); } catch (err) { $('error').textContent = `Couldn’t read that file: ${err.message}`; }
+  try {
+    const edf = parseEDF(await f.arrayBuffer());
+    S.file = f;
+    load(edf, f.name);
+  } catch (err) { $('error').textContent = `Couldn’t read that file: ${err.message}`; }
 }
 $('file').onchange = (e) => e.target.files[0] && openFile(e.target.files[0]);
 $('drop').ondragover = (e) => { e.preventDefault(); $('drop').classList.add('over'); };
 $('drop').ondragleave = () => $('drop').classList.remove('over');
 $('drop').ondrop = (e) => { e.preventDefault(); $('drop').classList.remove('over'); e.dataTransfer.files[0] && openFile(e.dataTransfer.files[0]); };
-$('demo').onclick = () => load(makeDemo(), 'demo-recording.edf');
+$('demo').onclick = () => openFile(demoFile());
 
 // Mount the history sidebar before the demo auto-load so load() can refresh it.
-const history = mountHistory(supabase, { getRecording: recordingMeta });
-if (new URLSearchParams(location.search).has('demo')) load(makeDemo(), 'demo-recording.edf');
+const history = mountHistory(supabase, {
+  getRecording: recordingMeta,
+  getFile: () => S.file,
+  getChecklist: () => S.checklist,
+  onOpen: (record, buffer) => {
+    const edf = parseEDF(buffer);
+    S.file = new File([buffer], record.filename, { type: 'application/edf' });
+    load(edf, record.filename, record.checklist);
+    $('report').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  },
+});
+if (new URLSearchParams(location.search).has('demo')) openFile(demoFile());
 
 mountAccount(supabase, {
   getRules: () => S.checklist,

@@ -1,4 +1,5 @@
 // Synthetic 5-minute, 6-channel recording with three known faults, so the demo never depends on a file.
+import { makeEdf } from './edfWrite.js';
 const rng = (s) => () => ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296);
 
 export function makeDemo(fs = 128, seconds = 300) {
@@ -21,4 +22,18 @@ export function makeDemo(fs = 128, seconds = 300) {
   [a, b] = span(200, 235); // O1: movement spikes
   for (let i = a; i < b; i += Math.round(fs * 0.7)) signals[4][i] += (r() < 0.5 ? -1 : 1) * 700;
   return { labels, rates: labels.map(() => fs), duration: seconds, signals };
+}
+
+// The same recording encoded as a real EDF file, so "Save analysis" stores
+// something that can actually be reopened later.
+export function demoEdf(fs = 128, seconds = 300) {
+  const demo = makeDemo(fs, seconds);
+  return makeEdf(
+    demo.labels.map((label, i) => ({ label, fs: demo.rates[i], data: demo.signals[i] })),
+    seconds,
+  );
+}
+
+export function demoFile(fs = 128, seconds = 300) {
+  return new File([demoEdf(fs, seconds)], 'demo-recording.edf', { type: 'application/edf' });
 }

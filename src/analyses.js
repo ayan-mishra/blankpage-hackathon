@@ -1,7 +1,17 @@
 // Previous analyses: plain data, validated once and shared by the local store,
-// the Supabase sync layer and the sidebar UI. No generated code, no recordings.
+// the Supabase sync layer and the sidebar UI. No generated code.
+import { normalizeRules } from './checklists.js';
+
 export const MAX_ANALYSES = 200;
 export const MAX_FILENAME = 200;
+export const MAX_STORAGE_PATH = 400;
+
+// The app's ceiling for a stored recording (per the 1 GB requirement).
+export const MAX_RECORDING_BYTES = 1024 * 1024 * 1024;
+// This Supabase project's storage plan refuses single objects above 50 MiB
+// ("upgrade to a paid plan to unlock higher file size limits"). Keep the two
+// numbers separate so the UI can tell the truth instead of promising 1 GB.
+export const UPLOAD_LIMIT_BYTES = 50 * 1024 * 1024;
 
 export function newAnalysisId() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
@@ -19,10 +29,11 @@ export function analysisFilename(name) {
 
 const isFiniteNumber = (v) => typeof v === 'number' && Number.isFinite(v);
 
-// One saved analysis. Only metadata leaves the tab; the recording itself never does.
+// One saved analysis. Only metadata, the checklist used and (optionally) a
+// pointer to the stored recording are kept here.
 export function normalizeAnalysis(raw) {
   if (!raw || typeof raw !== 'object') throw new Error('That is not a valid Somnium analysis.');
-  const { id, filename, durationSec, channels, sampleRate, createdAt, synced } = raw;
+  const { id, filename, durationSec, channels, sampleRate, createdAt, synced, checklist, sizeBytes, storagePath, owner } = raw;
   if (typeof id !== 'string' || !id.trim() || [...id].length > 100) {
     throw new Error('That is not a valid Somnium analysis.');
   }
@@ -37,6 +48,31 @@ export function normalizeAnalysis(raw) {
   }
   const when = createdAt instanceof Date ? createdAt : new Date(createdAt);
   if (Number.isNaN(when.getTime())) throw new Error('That analysis has an invalid date.');
+
+  const rules = checklist == null ? [] : normalizeRules(checklist);
+
+  let size = null;
+  if (sizeBytes != null) {
+    if (!Number.isInteger(sizeBytes) || sizeBytes <= 0 || sizeBytes > MAX_RECORDING_BYTES) {
+      throw new Error('That analysis has an invalid recording size.');
+    }
+    size = sizeBytes;
+  }
+
+  let path = null;
+  if (storagePath != null) {
+    if (typeof storagePath !== 'string') throw new Error('That analysis has an invalid storage path.');
+    const trimmed = storagePath.trim();
+    if (!trimmed || [...trimmed].length > MAX_STORAGE_PATH || trimmed.startsWith('/') || trimmed.includes('..')) {
+      throw new Error('That analysis has an invalid storage path.');
+    }
+    path = trimmed;
+  }
+
+  if (owner != null && (typeof owner !== 'string' || !owner)) {
+    throw new Error('That analysis has an invalid owner.');
+  }
+
   return {
     id: id.trim(),
     filename: analysisFilename(filename),
@@ -45,6 +81,10 @@ export function normalizeAnalysis(raw) {
     sampleRate,
     createdAt: when.toISOString(),
     synced: !!synced,
+    checklist: rules,
+    sizeBytes: size,
+    storagePath: path,
+    owner: owner ?? null,
   };
 }
 
@@ -58,6 +98,10 @@ export function buildAnalysis(meta, overrides = {}) {
     sampleRate: meta.sampleRate,
     createdAt: overrides.createdAt ?? new Date().toISOString(),
     synced: overrides.synced ?? false,
+    checklist: overrides.checklist ?? [],
+    sizeBytes: overrides.sizeBytes ?? null,
+    storagePath: overrides.storagePath ?? null,
+    owner: overrides.owner ?? null,
   });
 }
 
@@ -93,6 +137,13 @@ export function formatRate(rate) {
   return `${Number.isInteger(rate) ? rate : rate.toFixed(1)} Hz`;
 }
 
+export function formatBytes(bytes) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 KB';
+  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+  if (bytes >= 1024 ** 2) return `${+(bytes / 1024 ** 2).toFixed(1)} MB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
 export function formatSaved(iso, now = Date.now()) {
   const then = new Date(iso);
   if (Number.isNaN(then.getTime())) return '';
@@ -114,6 +165,9 @@ export function toRow(rec) {
     channels: rec.channels,
     sample_rate: rec.sampleRate,
     created_at: rec.createdAt,
+    checklist: rec.checklist,
+    size_bytes: rec.sizeBytes,
+    storage_path: rec.storagePath,
   };
 }
 
@@ -126,5 +180,8 @@ export function fromRow(row) {
     sampleRate: Number(row.sample_rate),
     createdAt: row.created_at,
     synced: true,
+    checklist: row.checklist ?? [],
+    sizeBytes: row.size_bytes == null ? null : Number(row.size_bytes),
+    storagePath: row.storage_path ?? null,
   });
 }

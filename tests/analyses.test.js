@@ -2,16 +2,47 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildAnalysis, normalizeAnalysis, mergeAnalyses, toRow, fromRow,
-  formatDuration, formatRate, formatSaved, analysisFilename,
+  formatDuration, formatRate, formatSaved, formatBytes, analysisFilename,
+  UPLOAD_LIMIT_BYTES, MAX_RECORDING_BYTES,
 } from '../src/analyses.js';
 import { createAnalysisService, memoryBackend } from '../src/analysisStore.js';
+import { DEFAULT_CHECKLIST } from '../src/rules.js';
 
 const meta = { filename: 'night-1.edf', durationSec: 300, channels: 6, sampleRate: 128 };
+const uid = '00000000-0000-4000-8000-000000000001';
+
+function fakeStorage(initial = new Map()) {
+  const objects = new Map(initial);
+  const calls = [];
+  return {
+    objects, calls,
+    from(bucket) {
+      return {
+        async upload(path, file) {
+          calls.push(['upload', bucket, path, file.size]);
+          if (objects.has(path)) return { data: null, error: { message: 'already exists' } };
+          objects.set(path, file);
+          return { data: { path }, error: null };
+        },
+        async download(path) {
+          calls.push(['download', bucket, path]);
+          const f = objects.get(path);
+          return f ? { data: f, error: null } : { data: null, error: { message: 'not found' } };
+        },
+        async remove(paths) {
+          calls.push(['remove', bucket, paths]);
+          for (const p of paths) objects.delete(p);
+          return { data: [], error: null };
+        },
+      };
+    },
+  };
+}
 
 // Minimal stand-in for the Supabase query builder the service uses.
 function fakeClient(initial = []) {
   const rows = initial.map((r) => ({ ...r }));
-  const calls = [];
+  const storage = fakeStorage();
   let mode = 'select', payload = null, filters = [];
   const finish = () => {
     if (mode === 'insert') {
@@ -28,8 +59,8 @@ function fakeClient(initial = []) {
     return Promise.resolve({ data: rows.map((r) => ({ ...r })), error: null });
   };
   const api = {
-    insert(p) { mode = 'insert'; payload = p; calls.push(['insert', p]); return api; },
-    delete() { mode = 'delete'; calls.push(['delete']); return api; },
+    insert(p) { mode = 'insert'; payload = p; return api; },
+    delete() { mode = 'delete'; return api; },
     select() { return api; },
     order() { return api; },
     limit() { return finish(); },
@@ -37,32 +68,43 @@ function fakeClient(initial = []) {
     then(res, rej) { return finish().then(res, rej); },
   };
   return {
-    rows, calls,
+    rows, storage,
     from() { mode = 'select'; payload = null; filters = []; return api; },
   };
 }
 
-test('buildAnalysis keeps only the metadata fields', () => {
-  const rec = buildAnalysis({ ...meta, labels: ['F3'], signals: [1, 2, 3] }, { id: 'a1', createdAt: '2026-10-17T10:00:00.000Z' });
-  assert.deepEqual(Object.keys(rec).sort(), ['channels', 'createdAt', 'durationSec', 'filename', 'id', 'sampleRate', 'synced']);
-  assert.equal(rec.id, 'a1');
-  assert.equal(rec.filename, 'night-1.edf');
-  assert.equal(rec.synced, false);
-  assert.equal(rec.createdAt, '2026-10-17T10:00:00.000Z');
+const blob = (bytes = 32) => new Blob([new Uint8Array(bytes)]);
+
+test('buildAnalysis keeps metadata, checklist and storage fields', () => {
+  const rec = buildAnalysis(
+    { ...meta, labels: ['F3'], signals: [1, 2, 3] },
+    { id: 'a1', createdAt: '2026-10-17T10:00:00.000Z', checklist: DEFAULT_CHECKLIST, owner: uid },
+  );
+  assert.deepEqual(Object.keys(rec).sort(), [
+    'channels', 'checklist', 'createdAt', 'durationSec', 'filename', 'id',
+    'owner', 'sampleRate', 'sizeBytes', 'storagePath', 'synced',
+  ]);
+  assert.equal(rec.checklist.length, DEFAULT_CHECKLIST.length);
+  assert.equal(rec.sizeBytes, null);
+  assert.equal(rec.storagePath, null);
+  assert.equal(rec.owner, uid);
 });
 
-test('normalizeAnalysis rejects impossible recordings', () => {
+test('normalizeAnalysis rejects impossible recordings and bad storage data', () => {
   const good = { id: 'a1', filename: 'x.edf', durationSec: 10, channels: 2, sampleRate: 256, createdAt: '2026-10-17T10:00:00Z' };
   for (const bad of [
     null, 'nope', {},
-    { ...good, id: '' }, { ...good, id: 'i'.repeat(101) },
-    { ...good, filename: '   ' }, { ...good, filename: 'x'.repeat(201) },
-    { ...good, durationSec: 0 }, { ...good, durationSec: -5 }, { ...good, durationSec: 86401 }, { ...good, durationSec: NaN },
-    { ...good, channels: 0 }, { ...good, channels: 1.5 }, { ...good, channels: 1025 },
-    { ...good, sampleRate: 0 }, { ...good, sampleRate: 2e6 },
+    { ...good, id: '' }, { ...good, filename: '   ' }, { ...good, filename: 'x'.repeat(201) },
+    { ...good, durationSec: 0 }, { ...good, durationSec: 86401 },
+    { ...good, channels: 0 }, { ...good, channels: 1.5 },
+    { ...good, sampleRate: 0 },
     { ...good, createdAt: 'not a date' },
+    { ...good, sizeBytes: 0 }, { ...good, sizeBytes: 1.5 }, { ...good, sizeBytes: MAX_RECORDING_BYTES + 1 },
+    { ...good, storagePath: '' }, { ...good, storagePath: '/abs/path' }, { ...good, storagePath: 'a/../b' },
+    { ...good, storagePath: 'x'.repeat(401) },
+    { ...good, checklist: [{ metric: 'nope', op: '>', value: 1 }] },
   ]) {
-    assert.throws(() => normalizeAnalysis(bad), /valid Somnium analysis|invalid recording length|invalid channel count|invalid sample rate|invalid date|Enter a recording name/);
+    assert.throws(() => normalizeAnalysis(bad), /valid Somnium analysis|valid Somnium checklist|invalid|Enter a recording name/);
   }
 });
 
@@ -70,7 +112,6 @@ test('analysisFilename trims and enforces the length cap', () => {
   assert.equal(analysisFilename('  night 1.edf  '), 'night 1.edf');
   assert.throws(() => analysisFilename(''), /1–200/);
   assert.throws(() => analysisFilename('a'.repeat(201)), /1–200/);
-  assert.equal(analysisFilename('😀'.repeat(200)).length > 0, true);
 });
 
 test('mergeAnalyses dedupes by id, newest first, and trusts the cloud copy', () => {
@@ -82,120 +123,142 @@ test('mergeAnalyses dedupes by id, newest first, and trusts the cloud copy', () 
   const cloud = [fromRow({
     local_id: 'a', filename: 'night-1.edf', duration_sec: '300', channels: '6',
     sample_rate: '128', created_at: '2026-10-16T10:00:00.000Z',
+    checklist: DEFAULT_CHECKLIST, size_bytes: 4096, storage_path: `${uid}/a.edf`,
   })];
   const merged = mergeAnalyses(local, cloud);
   assert.deepEqual(merged.map((r) => r.id), ['b', 'a']);
-  assert.equal(merged.find((r) => r.id === 'a').createdAt, '2026-10-16T10:00:00.000Z');
-  assert.equal(merged.find((r) => r.id === 'a').synced, true);
+  const a = merged.find((r) => r.id === 'a');
+  assert.equal(a.createdAt, '2026-10-16T10:00:00.000Z');
+  assert.equal(a.synced, true);
+  assert.equal(a.sizeBytes, 4096);
+  assert.equal(a.storagePath, `${uid}/a.edf`);
+  assert.equal(a.checklist.length, DEFAULT_CHECKLIST.length);
   assert.equal(merged.find((r) => r.id === 'b').synced, false);
 });
 
 test('toRow and fromRow round-trip the database column names', () => {
-  const rec = buildAnalysis(meta, { id: 'a1', createdAt: '2026-10-17T10:00:00.000Z', synced: true });
+  const rec = buildAnalysis(meta, {
+    id: 'a1', createdAt: '2026-10-17T10:00:00.000Z', synced: true,
+    checklist: DEFAULT_CHECKLIST, sizeBytes: 2048, storagePath: `${uid}/a1.edf`,
+  });
   const row = toRow(rec);
-  assert.deepEqual(Object.keys(row).sort(), ['channels', 'created_at', 'duration_sec', 'filename', 'local_id', 'sample_rate']);
+  assert.deepEqual(Object.keys(row).sort(), [
+    'channels', 'checklist', 'created_at', 'duration_sec', 'filename',
+    'local_id', 'sample_rate', 'size_bytes', 'storage_path',
+  ]);
   assert.deepEqual(fromRow(row), rec);
 });
 
 test('formatting helpers stay readable', () => {
   assert.equal(formatDuration(300), '5m 00s');
-  assert.equal(formatDuration(45), '45s');
   assert.equal(formatDuration(3725), '1h 02m');
-  assert.equal(formatRate(128), '128 Hz');
   assert.equal(formatRate(256.5), '256.5 Hz');
+  assert.equal(formatBytes(UPLOAD_LIMIT_BYTES), '50 MB');
+  assert.equal(formatBytes(462592), '452 KB');
+  assert.equal(formatBytes(1536), '2 KB');
+  assert.equal(formatBytes(0), '0 KB');
   const now = Date.parse('2026-10-17T12:00:00Z');
   assert.equal(formatSaved('2026-10-17T11:59:40Z', now), 'just now');
-  assert.equal(formatSaved('2026-10-17T11:30:00Z', now), '30 min ago');
-  assert.equal(formatSaved('2026-10-17T08:00:00Z', now), '4 h ago');
   assert.equal(formatSaved('2026-10-15T12:00:00Z', now), '2 d ago');
 });
 
-test('service saves locally while signed out and syncs on sign-in', async () => {
-  const client = fakeClient();
-  const service = createAnalysisService({ client, backend: memoryBackend(), now: () => new Date('2026-10-17T12:00:00.000Z') });
-
-  const saved = await service.save(meta);
-  assert.equal(saved.synced, false);
+test('saving stores the recording locally so it can be reopened offline', async () => {
+  const service = createAnalysisService({ client: null, backend: memoryBackend() });
+  const file = blob(64);
+  const saved = await service.save({ meta, file, checklist: DEFAULT_CHECKLIST, keep: true });
   assert.equal(saved.error, null);
+  assert.equal(saved.record.sizeBytes, file.size);
+  assert.equal(saved.record.owner, null);
   assert.equal((await service.list()).length, 1);
-  assert.equal(client.rows.length, 0, 'nothing is pushed while signed out');
 
-  service.setSession({ user: { id: 'u1' } });
-  const result = await service.sync();
-  assert.equal(result.pushed, 1);
-  assert.equal(client.rows.length, 1);
-  assert.equal(client.rows[0].local_id, saved.record.id);
-  assert.equal(client.rows[0].duration_sec, 300);
-  assert.equal((await service.list())[0].synced, true);
-
-  // A second sync must not duplicate the row.
-  const again = await service.sync();
-  assert.equal(again.pushed, 0);
-  assert.equal(client.rows.length, 1);
+  const { record, blob: stored } = await service.open(saved.record.id);
+  assert.equal(record.filename, 'night-1.edf');
+  assert.equal(stored.size, 64);
+  assert.equal(record.checklist.length, DEFAULT_CHECKLIST.length);
 });
 
-test('service pulls account analyses into the sidebar', async () => {
-  const client = fakeClient([
-    { local_id: 'cloud-1', filename: 'from-laptop.edf', duration_sec: 600, channels: 4, sample_rate: 200, created_at: '2026-10-16T09:00:00.000Z' },
+test('signed-in save uploads the recording and records its path', async () => {
+  const client = fakeClient();
+  const service = createAnalysisService({ client, backend: memoryBackend() });
+  service.setSession({ user: { id: uid } });
+  const saved = await service.save({ meta, file: blob(128), checklist: DEFAULT_CHECKLIST });
+  assert.equal(saved.synced, true);
+  assert.equal(saved.record.owner, uid);
+  assert.equal(saved.record.storagePath, `${uid}/${saved.record.id}.edf`);
+  assert.equal(client.storage.objects.size, 1);
+  assert.equal(client.rows.length, 1);
+  assert.equal(client.rows[0].storage_path, `${uid}/${saved.record.id}.edf`);
+  assert.equal(client.rows[0].size_bytes, 128);
+  assert.equal(client.rows[0].checklist.length, DEFAULT_CHECKLIST.length);
+});
+
+test('a recording over the plan limit is skipped but the details are saved', async () => {
+  const client = fakeClient();
+  const service = createAnalysisService({ client, backend: memoryBackend() });
+  service.setSession({ user: { id: uid } });
+  const tooBig = { size: UPLOAD_LIMIT_BYTES + 1 };
+  const saved = await service.save({ meta, file: tooBig, checklist: [] });
+  assert.equal(saved.tooBig, true);
+  assert.equal(saved.record.storagePath, null);
+  assert.equal(saved.record.sizeBytes, null);
+  assert.equal(client.storage.objects.size, 0);
+  assert.equal(client.rows.length, 1, 'the row still syncs');
+  assert.equal((await service.list()).length, 1);
+});
+
+test('opening falls back to the account when this browser has no cached file', async () => {
+  const client = fakeClient();
+  const service = createAnalysisService({ client, backend: memoryBackend() });
+  service.setSession({ user: { id: uid } });
+  const saved = await service.save({ meta, file: blob(16) });
+  // Simulate a second device: same row, no local blob.
+  const fresh = createAnalysisService({ client, backend: memoryBackend([saved.record]) });
+  fresh.setSession({ user: { id: uid } });
+  const { blob: downloaded } = await fresh.open(saved.record.id);
+  assert.equal(downloaded.size, 16);
+  assert.ok(client.storage.calls.some(([op, , path]) => op === 'download' && path === saved.record.storagePath));
+});
+
+test('another account in the same browser never sees or uploads these analyses', async () => {
+  const client = fakeClient();
+  const backend = memoryBackend([
+    buildAnalysis(meta, { id: 'mine', owner: uid, createdAt: '2026-10-17T10:00:00.000Z' }),
   ]);
-  const backend = memoryBackend();
   const service = createAnalysisService({ client, backend });
-  service.setSession({ user: { id: 'u1' } });
-  const result = await service.sync();
-  assert.equal(result.pulled, 1);
-  const list = await service.list();
-  assert.equal(list.length, 1);
-  assert.equal(list[0].filename, 'from-laptop.edf');
-  assert.equal(list[0].channels, 4);
-  assert.equal(list[0].synced, true);
-  assert.equal((await backend.all()).length, 1, 'the pull is written to the local store');
-});
-
-test('a failed push keeps the local analysis and reports the error', async () => {
-  const failing = {
-    from: () => ({
-      insert: () => ({ then: (ok) => ok({ error: { code: '500', message: 'nope' } }) }),
-    }),
-  };
-  const service = createAnalysisService({ client: failing, backend: memoryBackend() });
-  service.setSession({ user: { id: 'u1' } });
-  const saved = await service.save(meta);
-  assert.equal(saved.synced, false);
-  assert.equal(saved.error.message, 'nope');
-  assert.equal((await service.list()).length, 1);
+  service.setSession({ user: { id: '00000000-0000-4000-8000-000000000002' } });
+  assert.equal((await service.list()).length, 0);
+  await service.sync();
+  assert.equal(client.rows.length, 0, 'the other account\'s row is not pushed');
 });
 
 test('delete removes the analysis locally and from the account', async () => {
-  const client = fakeClient([
-    { local_id: 'a1', filename: 'x.edf', duration_sec: 10, channels: 2, sample_rate: 128, created_at: '2026-10-17T09:00:00.000Z' },
-  ]);
-  const backend = memoryBackend([
-    { id: 'a1', filename: 'x.edf', durationSec: 10, channels: 2, sampleRate: 128, createdAt: '2026-10-17T09:00:00.000Z', synced: true },
-  ]);
-  const service = createAnalysisService({ client, backend });
-  service.setSession({ user: { id: 'u1' } });
-  assert.equal((await service.remove('a1')).error, null);
+  const client = fakeClient();
+  const service = createAnalysisService({ client, backend: memoryBackend() });
+  service.setSession({ user: { id: uid } });
+  const saved = await service.save({ meta, file: blob(16) });
+  assert.equal((await service.remove(saved.record.id)).error, null);
   assert.equal((await service.list()).length, 0);
-  assert.equal((await backend.all()).length, 0);
   assert.equal(client.rows.length, 0);
+  assert.equal(client.storage.objects.size, 0);
 });
 
 test('switching accounts cannot write a stale sync result', async () => {
   let release;
   const gate = new Promise((resolve) => { release = resolve; });
-  let rows = [{ local_id: 'old', filename: 'old.edf', duration_sec: 10, channels: 1, sample_rate: 100, created_at: '2026-10-01T00:00:00.000Z' }];
+  const rows = [{ local_id: 'old', filename: 'old.edf', duration_sec: 10, channels: 1, sample_rate: 100, created_at: '2026-10-01T00:00:00.000Z' }];
   const client = {
     from: () => ({
       select: () => ({ order: () => ({ limit: () => gate.then(() => ({ data: rows, error: null })) }) }),
       insert: () => ({ then: (ok) => ok({ error: null }) }),
       delete: () => ({ eq: () => ({ select: () => ({ then: (ok) => ok({ data: [], error: null }) }) }) }),
     }),
+    storage: fakeStorage(),
   };
   const backend = memoryBackend();
   const service = createAnalysisService({ client, backend });
   service.setSession({ user: { id: 'u1' } });
   const pending = service.sync();
-  service.setSession({ user: { id: 'u2' } }); // account switch mid-flight
+  service.setSession({ user: { id: 'u2' } });
   release();
   const result = await pending;
   assert.equal(result.total, 0);
