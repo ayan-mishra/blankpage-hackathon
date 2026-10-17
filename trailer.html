@@ -47,7 +47,6 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
 .logo h1{font:800 clamp(72px,13vw,200px)/.9 var(--display);letter-spacing:-.045em}
 .logo .rule{width:1px;height:11vh}
 .logo .tag{font:italic 400 clamp(20px,2.4vw,34px)/1.3 var(--body);color:var(--indigo)}
-.logo .fine{margin-top:1.2rem;font:700 clamp(11px,1vw,15px)/1 var(--display);letter-spacing:.24em;text-transform:uppercase;color:var(--pass)}
 
 .screen{position:fixed;inset:0;display:grid;place-content:center;justify-items:center;gap:1.4rem;text-align:center;background:var(--night);color:var(--moon);font-family:var(--display)}
 .screen .kicker{font:700 14px/1 var(--display);letter-spacing:.32em;text-transform:uppercase;color:var(--dim)}
@@ -90,7 +89,6 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
   <h1 id="word">Somnium</h1>
   <div class="rule" id="rule"></div>
   <p class="tag" id="tag">Describe your standard. See what passes.</p>
-  <p class="fine" id="fine">Runs in your browser · Nothing is uploaded</p>
 </div>
 
 <div class="screen" id="start">
@@ -296,7 +294,6 @@ function overlays(t) {
   st.style.transform = `rotate(-6deg) scale(${lerp(1.5, 1, ss(35.6, 35.8, t))})`;
   $('#logo').style.opacity = ss(38.6, 39.4, t);
   $('#tag').style.opacity = ss(39.4, 40, t);
-  $('#fine').style.opacity = ss(40.2, 40.8, t);
   $('#replay').style.display = t > END - 0.5 ? 'block' : 'none';
 }
 
