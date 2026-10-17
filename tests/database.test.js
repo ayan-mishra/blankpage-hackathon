@@ -4,17 +4,36 @@ import { readFile, readdir } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 import { DEFAULT_CHECKLIST } from '../src/rules.js';
 
+// Minimal stand-ins for the Supabase-managed schemas the migrations touch.
+async function setup(db) {
+  await db.exec(`create role anon; create role authenticated;
+    create schema auth;
+    create table auth.users(id uuid primary key);
+    create function auth.uid() returns uuid language sql stable as
+      $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
+    grant usage on schema auth to authenticated;
+    grant execute on function auth.uid() to authenticated;
+    insert into auth.users values ('00000000-0000-4000-8000-000000000001'), ('00000000-0000-4000-8000-000000000002');`);
+  await db.exec(`create schema storage;
+    create table storage.buckets (
+      id text primary key, name text not null, public boolean not null default false,
+      file_size_limit bigint, allowed_mime_types text[]);
+    create table storage.objects (
+      id uuid primary key default gen_random_uuid(),
+      bucket_id text not null references storage.buckets(id),
+      name text not null);
+    alter table storage.objects enable row level security;
+    create function storage.foldername(name text) returns text[]
+      language sql immutable as $$ select string_to_array(name, '/') $$;
+    grant usage on schema storage to anon, authenticated;
+    grant select, insert, delete, update on storage.objects to anon, authenticated;
+    grant select on storage.buckets to anon, authenticated;`);
+}
+
 test('migration enforces owner access, least privilege and rule validation in Postgres', async () => {
   const db = new PGlite();
   try {
-    await db.exec(`create role anon; create role authenticated;
-      create schema auth;
-      create table auth.users(id uuid primary key);
-      create function auth.uid() returns uuid language sql stable as
-        $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
-      grant usage on schema auth to authenticated;
-      grant execute on function auth.uid() to authenticated;
-      insert into auth.users values ('00000000-0000-4000-8000-000000000001'), ('00000000-0000-4000-8000-000000000002');`);
+    await setup(db);
     // Supabase's optional automatic-RLS setup installs this trigger helper.
     await db.exec(`create function public.rls_auto_enable() returns event_trigger language plpgsql security definer as $$begin return;end;$$;`);
     for (const name of (await readdir(new URL('../supabase/migrations/', import.meta.url))).sort()) {
@@ -49,14 +68,7 @@ test('migration enforces owner access, least privilege and rule validation in Po
 test('analyses migration keeps saved analyses private, immutable and validated', async () => {
   const db = new PGlite();
   try {
-    await db.exec(`create role anon; create role authenticated;
-      create schema auth;
-      create table auth.users(id uuid primary key);
-      create function auth.uid() returns uuid language sql stable as
-        $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
-      grant usage on schema auth to authenticated;
-      grant execute on function auth.uid() to authenticated;
-      insert into auth.users values ('00000000-0000-4000-8000-000000000001'), ('00000000-0000-4000-8000-000000000002');`);
+    await setup(db);
     for (const name of (await readdir(new URL('../supabase/migrations/', import.meta.url))).sort()) {
       await db.exec(await readFile(new URL('../supabase/migrations/' + name, import.meta.url), 'utf8'));
     }
@@ -85,6 +97,30 @@ test('analyses migration keeps saved analyses private, immutable and validated',
     // Snapshots are immutable: no UPDATE grant exists.
     await assert.rejects(db.query("update public.analyses set filename = 'changed'"), /permission denied/);
 
+    // Reopening metadata: checklist snapshot, storage pointer and stored size.
+    const { rows: [rich] } = await db.query(
+      `insert into public.analyses(local_id,filename,duration_sec,channels,sample_rate,checklist,storage_path,size_bytes)
+       values ('local-2','night-2.edf',600,4,200,$1,$2,$3) returning checklist, size_bytes`,
+      [JSON.stringify(DEFAULT_CHECKLIST), '00000000-0000-4000-8000-000000000001/local-2.edf', 950000],
+    );
+    assert.equal(rich.checklist.length, DEFAULT_CHECKLIST.length);
+    assert.equal(Number(rich.size_bytes), 950000);
+    for (const over of [
+      { size_bytes: 0 }, { size_bytes: 1073741825 },
+      { storage_path: '   ' }, { storage_path: '/' + 'a'.repeat(5) },
+      { checklist: [{ metric: 'nope', op: '>', value: 1 }] },
+    ]) {
+      const cols = { local_id: 'bad', filename: 'x.edf', duration_sec: 10, channels: 1, sample_rate: 100, ...over };
+      const names = Object.keys(cols);
+      await assert.rejects(
+        db.query(
+          `insert into public.analyses(${names.join(',')}) values (${names.map((_, i) => '$' + (i + 1)).join(',')})`,
+          names.map((n) => (n === 'checklist' ? JSON.stringify(cols[n]) : cols[n])),
+        ),
+        /check constraint/,
+      );
+    }
+
     await db.exec(`set request.jwt.claim.sub = '00000000-0000-4000-8000-000000000002';`);
     assert.equal((await db.query('select * from public.analyses')).rows.length, 0);
     assert.equal((await db.query('delete from public.analyses where id=$1 returning id', [row.id])).rows.length, 0);
@@ -95,6 +131,27 @@ test('analyses migration keeps saved analyses private, immutable and validated',
     // The same local id belongs to each account separately.
     await insert();
     assert.equal((await db.query('select * from public.analyses')).rows.length, 1);
+
+    // The recordings bucket is private and capped at this project's plan limit.
+    const bucket = (await db.query("select public, file_size_limit from storage.buckets where id='recordings'")).rows[0];
+    assert.equal(bucket.public, false);
+    assert.equal(Number(bucket.file_size_limit), 52428800);
+    const policies = (await db.query(
+      "select policyname from pg_policies where schemaname='storage' and tablename='objects' order by policyname",
+    )).rows.map((r) => r.policyname);
+    assert.deepEqual(policies, ['Delete own recordings', 'Read own recordings', 'Upload own recordings']);
+
+    // Storage objects are confined to the caller's own <uid>/ prefix.
+    const uid2 = '00000000-0000-4000-8000-000000000002';
+    await db.query("insert into storage.objects(bucket_id,name) values ('recordings',$1)", [`${uid2}/own.edf`]);
+    await assert.rejects(
+      db.query("insert into storage.objects(bucket_id,name) values ('recordings',$1)", ['00000000-0000-4000-8000-000000000001/stolen.edf']),
+      /row-level security/,
+    );
+    assert.equal((await db.query('select * from storage.objects')).rows.length, 1);
+    await db.exec(`set request.jwt.claim.sub = '00000000-0000-4000-8000-000000000001';`);
+    assert.equal((await db.query('select * from storage.objects')).rows.length, 0, 'other accounts cannot read the object');
+    assert.equal((await db.query('delete from storage.objects returning id')).rows.length, 0, 'or delete it');
 
     await db.exec('set role anon;');
     await assert.rejects(db.query('select * from public.analyses'), /permission denied/);

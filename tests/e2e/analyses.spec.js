@@ -7,22 +7,69 @@ const token = () => {
 };
 const session = () => ({ access_token: token(), refresh_token: 'test-refresh', token_type: 'bearer', expires_in: 3600, user });
 
-async function mockBackend(page) {
-  const state = { analyses: [], posted: [] };
+function newState() {
+  return { analyses: [], posted: [], objects: new Map(), uploads: 0, downloads: 0 };
+}
+
+// storage-js uploads a Blob as multipart/form-data. Pull the file part back out
+// so the mock serves the actual EDF bytes on download, like the real service.
+function extractFilePart(buf, contentType) {
+  const m = /boundary=([^;]+)/.exec(contentType || '');
+  if (!m || !buf) return buf;
+  const boundary = Buffer.from(`--${m[1].replace(/^"|"$/g, '')}`);
+  let start = buf.indexOf(boundary);
+  while (start !== -1) {
+    const next = buf.indexOf(boundary, start + boundary.length);
+    if (next === -1) break;
+    const part = buf.subarray(start + boundary.length, next);
+    const headerEnd = part.indexOf('\r\n\r\n');
+    // storage-js sends the blob as `Content-Disposition: form-data; name=""; filename="..."`,
+    // alongside plain fields (cacheControl, metadata), so key off filename.
+    if (headerEnd !== -1 && /filename=/.test(part.subarray(0, headerEnd).toString('latin1'))) {
+      return part.subarray(headerEnd + 4, part.length - 2);
+    }
+    start = next;
+  }
+  return buf;
+}
+
+async function mockBackend(page, state = newState()) {
   await page.route('https://somnium-test.supabase.co/**', async route => {
     const request = route.request(), url = new URL(request.url());
+    const path = url.pathname;
+
+    if (path.includes('/storage/v1/object/recordings')) {
+      const key = path.includes('/object/recordings/')
+        ? decodeURIComponent(path.split('/object/recordings/')[1])
+        : '';
+      if (request.method() === 'DELETE') {
+        state.objects.clear();
+        return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+      }
+      if (request.method() === 'GET' || request.method() === 'HEAD') {
+        const bytes = state.objects.get(key);
+        state.downloads++;
+        if (!bytes) return route.fulfill({ status: 400, contentType: 'application/json', body: '{"message":"not found"}' });
+        return route.fulfill({ status: 200, contentType: 'application/octet-stream', body: bytes });
+      }
+      // POST / PUT -> upload
+      state.objects.set(key, extractFilePart(request.postDataBuffer(), request.headers()['content-type']));
+      state.uploads++;
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ Key: `recordings/${key}` }) });
+    }
+
     let body = {}, status = 200;
-    if (url.pathname.endsWith('/token')) body = session();
-    else if (url.pathname.endsWith('/user')) body = user;
-    else if (url.pathname.includes('/rest/v1/analyses')) {
+    if (path.endsWith('/token')) body = session();
+    else if (path.endsWith('/user')) body = user;
+    else if (path.includes('/rest/v1/analyses')) {
       if (request.method() === 'POST') {
         const row = request.postDataJSON();
         state.posted.push(row);
         state.analyses.push(row);
         body = null; status = 201;
-      } else if (request.method() === 'DELETE') { body = [{ id: 'gone' }]; state.analyses = []; }
+      } else if (request.method() === 'DELETE') { body = []; state.analyses = []; }
       else body = state.analyses;
-    } else if (url.pathname.includes('/rest/v1/checklists')) body = [];
+    } else if (path.includes('/rest/v1/checklists')) body = [];
     await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
   });
   return state;
@@ -35,46 +82,67 @@ async function login(page) {
   await expect(page.locator('#cloud')).toBeVisible();
 }
 
-const item = (page) => page.locator('#historyList .history-item');
+const rows = (page) => page.locator('#historyList li');
+const saveBtn = (page) => page.getByRole('button', { name: 'Save analysis' });
 
-test('saves an analysis locally, survives a reload, and deletes', async ({ page }) => {
+test('saves an analysis, survives a reload, reopens the recording, and deletes', async ({ page }) => {
   await page.goto('/app.html?demo');
   await expect(page.locator('#report')).toBeVisible();
-  await expect(item(page)).toHaveCount(0);
+  await expect(rows(page)).toHaveCount(0);
 
-  const save = page.getByRole('button', { name: 'Save analysis' });
-  await expect(save).toBeEnabled();
-  await save.click();
-
-  await expect(item(page)).toHaveCount(1);
-  await expect(item(page)).toContainText('demo-recording.edf');
-  await expect(item(page)).toContainText('6 ch · 128 Hz · 5m 00s');
+  await expect(saveBtn(page)).toBeEnabled();
+  await saveBtn(page).click();
+  await expect(rows(page)).toHaveCount(1);
+  await expect(rows(page)).toContainText('demo-recording.edf');
   await expect(page.locator('#historyStatus')).toHaveText('Analysis saved on this device.');
 
   await page.reload();
-  await expect(item(page)).toHaveCount(1);
+  await expect(rows(page)).toHaveCount(1);
   await expect(page.locator('#historyStatus')).toHaveText('1 saved on this device');
-  await expect(item(page)).toContainText('demo-recording.edf');
+
+  // Load the page with no recording at all, then reopen from history.
+  await page.goto('/app.html');
+  await expect(page.locator('#report')).toBeHidden();
+  await expect(rows(page)).toHaveCount(1);
+  await rows(page).locator('.history-open').click();
+  await expect(page.locator('#report')).toBeVisible();
+  await expect(page.locator('#verdict')).toContainText('usable after fixes');
+  await expect(page.locator('#checklist li')).toHaveCount(5);
 
   page.on('dialog', dialog => dialog.accept());
-  await page.locator('.history-del').click();
-  await expect(item(page)).toHaveCount(0);
+  await rows(page).locator('.history-remove').click();
+  await expect(rows(page)).toHaveCount(0);
+});
+
+test('reopening restores the checklist the analysis was saved with', async ({ page }) => {
+  await page.goto('/app.html?demo');
+  // Drop one rule so the saved checklist differs from the default.
+  await page.locator('#checklist button').first().click();
+  await expect(page.locator('#checklist li')).toHaveCount(4);
+  await saveBtn(page).click();
+  await expect(rows(page)).toHaveCount(1);
+
+  await page.goto('/app.html');
+  await expect(page.locator('#checklist')).toBeHidden();
+  await rows(page).locator('.history-open').click();
+  await expect(page.locator('#report')).toBeVisible();
+  await expect(page.locator('#checklist li')).toHaveCount(4);
 });
 
 test('loading a recording does not save history on its own', async ({ page }) => {
   await page.goto('/app.html?demo');
   await expect(page.locator('#report')).toBeVisible();
-  await expect(item(page)).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Save analysis' })).toBeEnabled();
+  await expect(rows(page)).toHaveCount(0);
+  await expect(saveBtn(page)).toBeEnabled();
 });
 
-test('signed-in save uploads only metadata and shows the account sync', async ({ page }) => {
+test('signed-in save uploads the recording and syncs metadata only', async ({ page }) => {
   const state = await mockBackend(page);
   await page.goto('/app.html?demo');
   await login(page);
 
-  await page.getByRole('button', { name: 'Save analysis' }).click();
-  await expect(item(page)).toHaveCount(1);
+  await saveBtn(page).click();
+  await expect(rows(page)).toHaveCount(1);
   await expect(page.locator('#historyStatus')).toHaveText('Analysis saved to your account.');
 
   expect(state.posted).toHaveLength(1);
@@ -84,45 +152,52 @@ test('signed-in save uploads only metadata and shows the account sync', async ({
     channels: 6,
     sample_rate: 128,
   });
-  expect(state.posted[0].local_id).toBeTruthy();
-  // No signal data, no rules: metadata only.
-  expect(Object.keys(state.posted[0]).sort()).toEqual(
-    ['channels', 'created_at', 'duration_sec', 'filename', 'local_id', 'sample_rate'],
-  );
+  expect(state.posted[0].storage_path).toMatch(new RegExp(`^${user.id}/`));
+  expect(Array.isArray(state.posted[0].checklist)).toBe(true);
+  expect(state.posted[0].checklist).toHaveLength(5);
+  expect(state.objects.size).toBe(1);
+  // Metadata only: no signal data is ever written to the row.
+  expect(Object.keys(state.posted[0]).sort()).toEqual([
+    'channels', 'checklist', 'created_at', 'duration_sec', 'filename',
+    'local_id', 'sample_rate', 'size_bytes', 'storage_path',
+  ]);
 });
 
-test('an analysis saved while signed in is pulled back on a fresh profile', async ({ page, browser }) => {
+test('an analysis saved in one browser can be reopened from the account in another', async ({ page, browser }) => {
   const state = await mockBackend(page);
   await page.goto('/app.html?demo');
   await login(page);
-  await page.getByRole('button', { name: 'Save analysis' }).click();
-  await expect(item(page)).toHaveCount(1);
+  await saveBtn(page).click();
+  await expect(rows(page)).toHaveCount(1);
 
-  // A different browser context has no IndexedDB history; it must come from the account.
+  // Different browser context: no IndexedDB history at all.
   const other = await browser.newContext();
   const fresh = await other.newPage();
-  await fresh.route('https://somnium-test.supabase.co/**', async route => {
-    const request = route.request(), url = new URL(request.url());
-    let body = {}, status = 200;
-    if (url.pathname.endsWith('/token')) body = session();
-    else if (url.pathname.endsWith('/user')) body = user;
-    else if (url.pathname.includes('/rest/v1/analyses')) body = state.analyses;
-    else if (url.pathname.includes('/rest/v1/checklists')) body = [];
-    await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
-  });
+  await mockBackend(fresh, state);
   await fresh.goto('/app.html');
   await login(fresh);
-  await expect(fresh.locator('#historyList .history-item')).toHaveCount(1);
-  await expect(fresh.locator('#historyList .history-item')).toContainText('demo-recording.edf');
+  await expect(fresh.locator('#historyList li')).toHaveCount(1);
+  await fresh.locator('#historyList li .history-open').click();
+  await expect(fresh.locator('#report')).toBeVisible();
+  await expect(fresh.locator('#verdict')).toContainText('usable after fixes');
+  expect(state.downloads).toBeGreaterThan(0);
   await other.close();
 });
 
-test('sidebar fits a phone without horizontal overflow', async ({ page }) => {
+test('sidebar follows the app theme and fits a phone without overflow', async ({ page }) => {
   await page.goto('/app.html?demo');
-  await page.getByRole('button', { name: 'Save analysis' }).click();
+  await saveBtn(page).click();
+  await expect(rows(page)).toHaveCount(1);
+
+  // The sidebar is a normal card, not a new design language.
+  const card = page.locator('#history');
+  await expect(card).toHaveClass(/card/);
+  const look = (el) => { const c = getComputedStyle(el); return [c.borderTopWidth, c.borderTopColor, c.borderRadius, c.boxShadow, c.backgroundColor]; };
+  expect(await card.evaluate(look)).toEqual(await page.locator('#load').evaluate(look));
+
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(item(page)).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Save analysis' })).toBeVisible();
+  await expect(rows(page)).toBeVisible();
+  await expect(saveBtn(page)).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: 'test-results/analyses-mobile.png', fullPage: true });
 });

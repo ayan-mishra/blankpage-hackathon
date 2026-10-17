@@ -2,6 +2,7 @@
 // Background is 1/f-shaped noise; rhythms come from narrowband resonators driven by white noise, which gives
 // the natural waxing and waning of real alpha/spindles. Events (blinks, spindles, K-complexes) and faults are
 // added on top. Everything is seeded, so the same call always returns the same signals.
+import { makeEdf } from './edfWrite.js';
 const rng = (s) => () => ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296);
 const TAU = 2 * Math.PI;
 
@@ -200,4 +201,18 @@ export function makeStudy(fs = 128, seconds = 3600) {
     ['P07_night1.edf', night(7)],
     ['P08_night1.edf', night(8, [{ kind: 'flat', from: 0.1, to: 1 }])],
   ].map(([name, edf]) => ({ name, edf }));
+}
+
+// The demo recording encoded as a real EDF file, so "Save analysis" stores
+// something that can actually be reopened later.
+export function demoEdf(fs = 128, seconds = 300) {
+  const demo = makeDemo(fs, seconds);
+  return makeEdf(
+    demo.labels.map((label, i) => ({ label, fs: demo.rates[i], data: demo.signals[i] })),
+    seconds,
+  );
+}
+
+export function demoFile(fs = 128, seconds = 300) {
+  return new File([demoEdf(fs, seconds)], 'demo-recording.edf', { type: 'application/edf' });
 }

@@ -4,14 +4,14 @@ import { normalizeRules, readSaved, writeSaved } from './checklists.js';
 import { parseEDF } from './edf.js';
 import { windowMetrics } from './metrics.js';
 import { METRICS, DEFAULT_CHECKLIST, evaluate, verdict, fmt, parseRule, proposeRule } from './rules.js';
-import { makeDemo } from './demo.js';
+import { makeDemo, demoFile } from './demo.js';
 import { mapLayout, GUT, TOP, ROW, MAP_W } from './map.js';
 import { mountHistory } from './history.js';
 
 const WIN = 5; // seconds per window
 const $ = (id) => document.getElementById(id);
 const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
-const S = { edf: null, name: '', by: [], checklist: readSaved() ?? [...DEFAULT_CHECKLIST], flags: [], preview: new Set(), sel: null, cell: null, rule: null, step: 1, cols: 0, last: null, change: null, starter: false };
+const S = { edf: null, name: '', file: null, demo: false, by: [], checklist: readSaved() ?? [...DEFAULT_CHECKLIST], flags: [], preview: new Set(), sel: null, cell: null, rule: null, step: 1, cols: 0, last: null, change: null, starter: false };
 
 // The demo starts from a 50 Hz lab's checklist (no 60 Hz rule) so the visitor can teach the
 // missing rule from C4's hum and watch the verdict change. Real files get the saved or full default.
@@ -39,7 +39,8 @@ function repWin(ch, col) {
   return flagged ? flagged.win : w0;
 }
 
-// Metadata for the history sidebar. Only these fields are stored, never the recording.
+// Metadata for the history sidebar. The recording itself is stored separately,
+// and only when the user asks to keep it.
 const RECORDING_NAME = 200;
 const cleanName = (name) => {
   const trimmed = typeof name === 'string' ? name.trim() : '';
@@ -52,8 +53,9 @@ const recordingMeta = () => (S.edf ? {
   sampleRate: S.edf.rates[0],
 } : null);
 
-function load(edf, { demo = false, name = '' } = {}) {
-  S.edf = edf;
+function load(edf, { demo = false, name = '', checklist = null } = {}) {
+  S.edf = edf; S.demo = demo;
+  if (demo) S.file = null; // encoded on demand when the demo is saved
   S.name = cleanName(demo ? 'demo-recording.edf' : name);
   S.by = edf.signals.map((x, i) => windowMetrics(x, edf.rates[i], WIN));
   const n = Math.min(...S.by.map((w) => w.length));
@@ -61,6 +63,8 @@ function load(edf, { demo = false, name = '' } = {}) {
   S.sel = S.cell = S.rule = S.last = S.change = null; S.preview = new Set();
   if (demo) { S.checklist = DEMO_START.map((r) => ({ ...r })); S.starter = true; }
   else if (S.starter) { S.checklist = readSaved() ?? [...DEFAULT_CHECKLIST]; S.starter = false; } // don't carry the demo's partial checklist to a real file
+  // Reopening an analysis restores the exact rules it was saved with.
+  if (!demo && Array.isArray(checklist)) S.checklist = checklist.map((r) => ({ ...r }));
   $('proposal').hidden = true; $('ruleError').textContent = '';
   $('tryIt').hidden = !demo; $('tryDone').hidden = true;
   ['step1', 'step2', 'step3'].forEach((id) => $(id).classList.remove('done'));
@@ -309,7 +313,11 @@ $('import').onchange = async (e) => {
 // ---- loading
 async function openFile(f) {
   $('error').textContent = '';
-  try { load(parseEDF(await f.arrayBuffer()), { name: f.name }); } catch (err) { $('error').textContent = `Couldn’t read that file: ${err.message}`; }
+  try {
+    const edf = parseEDF(await f.arrayBuffer());
+    S.file = f; // kept so a saved analysis can store (and reopen) it
+    load(edf, { name: f.name });
+  } catch (err) { $('error').textContent = `Couldn’t read that file: ${err.message}`; }
 }
 $('file').onchange = (e) => e.target.files[0] && openFile(e.target.files[0]);
 $('drop').ondragover = (e) => { e.preventDefault(); $('drop').classList.add('over'); };
@@ -317,7 +325,17 @@ $('drop').ondragleave = () => $('drop').classList.remove('over');
 $('drop').ondrop = (e) => { e.preventDefault(); $('drop').classList.remove('over'); e.dataTransfer.files[0] && openFile(e.dataTransfer.files[0]); };
 $('demo').onclick = () => { load(makeDemo(), { demo: true }); $('report').scrollIntoView({ block: 'start' }); };
 // Mount the history sidebar before the demo auto-load so load() can refresh it.
-const history = mountHistory(supabase, { getRecording: recordingMeta });
+const history = mountHistory(supabase, {
+  getRecording: recordingMeta,
+  getFile: () => S.file ?? (S.demo ? demoFile() : null),
+  getChecklist: () => S.checklist,
+  onOpen: (record, buffer) => {
+    const edf = parseEDF(buffer);
+    S.file = new File([buffer], record.filename, { type: 'application/edf' });
+    load(edf, { name: record.filename, checklist: record.checklist });
+    $('report').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  },
+});
 if (new URLSearchParams(location.search).has('demo')) load(makeDemo(), { demo: true });
 
 mountAccount(supabase, {
