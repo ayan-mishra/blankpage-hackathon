@@ -6,16 +6,14 @@
 <title>Somnium · EEG recording trust check</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%276%27 fill=%27%23fbf1ef%27/%3E%3Cpath d=%27M2 17l4-1 3-8 4 17 4-14 3 9 3-4 5 1%27 fill=%27none%27 stroke=%27%23191a33%27 stroke-width=%272.4%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E">
 <meta name="description" content="Check an EEG recording in your browser and write your own quality rules.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <noscript><p>Somnium needs JavaScript to read recordings in your browser.</p></noscript>
 <header>
   <h1><a href="./">Somnium</a></h1>
-  <p class="tag">Describe your standard. See what passes.</p>
+  <nav class="tabs"><a href="app.html" aria-current="page">Check one recording</a><a href="study.html">Check a study</a></nav>
+  <p class="tag">Check an EEG recording you’ve collected. No experience needed: every result comes with a plain-English reason.</p>
 </header>
 <div class="shell">
   <aside id="history" class="card" aria-labelledby="historyHeading">
@@ -30,81 +28,109 @@
     <p class="hint" id="historyEmpty">Load a recording, then save it here to build your history.</p>
     <ul id="historyList" hidden></ul>
   </aside>
-  <main>
-    <section id="account" class="card" aria-labelledby="accountHeading">
-      <div class="row-head"><h2 id="accountHeading">Your account</h2><span class="hint">Save your standards. Keep recordings local.</span></div>
-      <form id="authForm" hidden>
-        <div class="row account-fields">
-          <label>Email<input id="email" type="email" autocomplete="email" required maxlength="254"></label>
-          <label>Password<input id="password" type="password" autocomplete="current-password" required maxlength="128"></label>
-        </div>
-        <div class="row">
-          <button id="login" name="action" value="login">Sign in</button>
-          <button id="signup" name="action" value="signup" class="ghost">Create account</button>
-          <button id="forgotPassword" name="action" value="reset" class="ghost">Send password reset</button>
-        </div>
-      </form>
-      <div id="signedIn" hidden><div class="row"><span id="accountEmail"></span><button id="signOut" class="ghost">Sign out</button></div></div>
-      <form id="recoveryForm" hidden>
-        <div class="row"><label>New password<input id="newPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label><button>Update password</button></div>
-      </form>
-      <div id="cloud" hidden>
-        <form id="saveForm" class="row"><label>Checklist name<input id="checklistName" maxlength="80" required placeholder="e.g. Sleep lab standard"></label><button id="saveChecklist">Save current checklist</button></form>
-        <div class="row"><label>Saved checklists<select id="savedChecklists"></select></label><button id="loadChecklist" class="ghost">Load</button><button id="deleteChecklist" class="ghost">Delete</button><button id="refreshChecklists" class="ghost">Refresh</button></div>
-        <p class="hint">Each save creates a private snapshot. Only rules and the checklist name are stored.</p>
+<main>
+  <section id="load" class="card">
+    <label class="drop" id="drop">
+      <input type="file" id="file" accept=".edf,.EDF" class="sr-only">
+      <strong>Drop an EDF recording</strong> or click to choose
+      <span>EEG recordings stay in your browser. Only checklists you save go to your account.</span>
+    </label>
+    <div class="row load-row"><button id="demo" class="ghost">Try the demo recording</button><span id="loaded" class="hint" hidden></span></div>
+    <p id="error" role="alert"></p>
+  </section>
+
+  <section id="report" hidden>
+    <div id="verdict" class="card" aria-live="polite">
+      <p class="eyebrow">Verdict</p>
+      <p class="verdict-line">This recording is <span id="verdictPill" class="pill"></span></p>
+      <p id="verdictWhy" class="hint"></p>
+      <p id="change" hidden></p>
+    </div>
+
+    <div class="card">
+      <div class="row-head map-head">
+        <div><h2>Recording map</h2><p class="hint" id="teachHint">Click a square to see why. Drag across several squares to teach a rule.</p></div>
+        <button id="teach" disabled>Teach a rule from selection</button>
       </div>
-      <p id="accountStatus" class="hint" role="status" aria-live="polite">Connecting to your account…</p>
-    </section>
-    <section id="load" class="card">
-      <label class="drop" id="drop">
-        <input type="file" id="file" accept=".edf,.EDF" hidden>
-        <strong>Drop an EDF recording</strong> or click to choose
-        <span>EEG recordings stay in your browser. Only checklists you save go to your account.</span>
-      </label>
-      <button id="demo" class="ghost">Try the demo recording</button>
-      <p id="error" role="alert"></p>
-    </section>
+      <div id="mapwrap"><canvas id="map" tabindex="0" role="application" aria-label="Recording map: one row per channel, one square per 5 seconds. Arrow keys move between squares; Shift and arrows select a region." aria-describedby="evidence"></canvas></div>
+      <div class="legend"><span><i class="ok"></i>clean</span><span><i class="bad"></i>flagged</span><span><i class="pre"></i>would be flagged by the rule you’re previewing</span></div>
+    </div>
 
-    <section id="report" hidden>
-      <div id="verdict" class="card"></div>
-
+    <div class="grid">
       <div class="card">
-        <div class="row-head"><h2>Recording map</h2><span class="hint">Click a cell for evidence · drag across cells to teach a rule</span></div>
-        <div id="mapwrap"><canvas id="map"></canvas></div>
-        <div class="legend"><i class="ok"></i>clean <i class="bad"></i>flagged <i class="pre"></i>would be flagged by the rule you’re previewing</div>
+        <h2>Evidence</h2>
+        <div id="evidence" aria-live="polite"></div>
+        <canvas id="trace" height="120" role="img" aria-label="Raw signal for the selected square"></canvas>
       </div>
 
-      <div class="grid">
-        <div class="card">
-          <h2>Evidence</h2>
-          <div id="evidence"><p class="hint">Select a cell on the map.</p></div>
-          <canvas id="trace" height="120"></canvas>
+      <section class="card" id="ruleBox" aria-labelledby="rulesHeading">
+        <div class="row-head"><h2 id="rulesHeading">Your rules</h2>
+          <span class="row-tools"><button id="export" class="ghost small">Export</button><label class="ghost btn small">Import<input type="file" id="import" accept=".json" class="sr-only"></label></span></div>
+        <p class="hint">The verdict comes from these rules. Change them and it updates.</p>
+        <div id="tryIt" class="tryit" hidden>
+          <p><strong>Try it.</strong> This demo starts with a checklist from a lab on 50 Hz power, but it was recorded on 60 Hz power. One channel has hum the checklist misses.</p>
+          <ol>
+            <li id="step1">Click <b>C4</b> after 2:30 on the map. It’s marked clean, but look at the trace.</li>
+            <li id="step2">Drag across C4 from 2:30 to the end, then press <b>Teach a rule from selection</b>.</li>
+            <li id="step3">Check the preview, then press <b>Add rule</b>. Watch the verdict.</li>
+          </ol>
+          <p id="tryDone" hidden><strong>That’s it.</strong> You taught Somnium something its starter checklist didn’t know, and the verdict changed.</p>
         </div>
-
-        <div class="card">
-          <h2>Add a rule</h2>
-          <div class="row"><input id="ruleText" placeholder="e.g. flag 60 Hz hum above 15%" aria-label="Describe a rule"><button id="ruleGo">Preview</button></div>
-          <div class="row"><button id="teach" class="ghost" disabled>Teach from selection</button><span class="hint" id="teachHint">Drag across the map first.</span></div>
-          <div id="proposal" hidden>
-            <div class="row">
-              <select id="pMetric"></select>
-              <select id="pOp"><option>&gt;</option><option>&lt;</option></select>
-              <input id="pValue" type="number" step="any">
-            </div>
-            <p id="pCount" class="hint"></p>
-            <div class="row"><button id="pAdd">Add to checklist</button><button id="pCancel" class="ghost">Cancel</button></div>
+        <form id="ruleForm" class="row"><input id="ruleText" placeholder="e.g. flag 60 Hz hum above 15%" aria-label="Describe a rule in words" autocomplete="off"><button id="ruleGo">Preview</button></form>
+        <p id="ruleError" class="hint" role="status"></p>
+        <div id="proposal" class="proposal" hidden>
+          <p class="eyebrow">Preview</p>
+          <div class="row">
+            <select id="pMetric" aria-label="What to measure"></select>
+            <select id="pOp" aria-label="Direction"><option value="&gt;">above</option><option value="&lt;">below</option></select>
+            <span class="value"><input id="pValue" type="number" step="any" aria-label="Threshold"><span id="pUnit"></span></span>
           </div>
-          <p id="ruleError" class="hint"></p>
+          <p id="pCount"></p>
+          <div class="row"><button id="pAdd">Add rule</button><button id="pCancel" class="ghost">Cancel</button></div>
         </div>
-      </div>
-
-      <div class="card">
-        <div class="row-head"><h2>Checklist</h2>
-          <span><button id="export" class="ghost">Export</button> <label class="ghost btn">Import<input type="file" id="import" accept=".json" hidden></label></span></div>
+        <h3>Applied now</h3>
         <ul id="checklist"></ul>
+        <p class="hint"><a href="study.html">Apply these rules to a study →</a></p>
+      </section>
+    </div>
+  </section>
+  <section id="account" class="card" aria-labelledby="accountHeading">
+    <div class="row-head"><h2 id="accountHeading">Your account</h2><span class="hint">Optional: sign in to save your checks. Recordings never leave your computer.</span></div>
+    <form id="authForm" hidden>
+      <div class="row account-fields">
+        <label>Email<input id="email" type="email" autocomplete="email" required maxlength="254"></label>
+        <label>Password<input id="password" type="password" autocomplete="current-password" required maxlength="128"></label>
       </div>
-    </section>
-  </main>
+      <div class="row">
+        <button id="login" name="action" value="login">Sign in</button>
+        <button id="signup" name="action" value="signup" class="ghost">Create account</button>
+        <button id="forgotPassword" name="action" value="reset" class="ghost">Send password reset</button>
+      </div>
+    </form>
+    <div id="signedIn" hidden><div class="row"><span id="accountEmail"></span><button id="signOut" class="ghost">Sign out</button></div></div>
+    <form id="recoveryForm" hidden>
+      <div class="row"><label>New password<input id="newPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label><button>Update password</button></div>
+    </form>
+    <div id="cloud" hidden>
+      <form id="saveForm" class="row"><label>Checklist name<input id="checklistName" maxlength="80" required placeholder="e.g. Sleep lab standard"></label><button id="saveChecklist">Save current checklist</button></form>
+      <div class="row"><label>Saved checklists<select id="savedChecklists"></select></label><button id="loadChecklist" class="ghost">Load</button><button id="deleteChecklist" class="ghost">Delete</button><button id="refreshChecklists" class="ghost">Refresh</button></div>
+      <p class="hint">Each save creates a private snapshot. Only rules and the checklist name are stored.</p>
+    </div>
+    <p id="accountStatus" class="hint" role="status" aria-live="polite">Connecting to your account…</p>
+  </section>
+  <details class="card glossary">
+    <summary>What do these words mean?</summary>
+    <dl>
+      <dt>EEG</dt><dd>A recording of electrical activity from the brain, taken with sensors on the head.</dd>
+      <dt>Channel</dt><dd>One sensor’s signal. Each row on the map is one channel.</dd>
+      <dt>Window</dt><dd>A short slice of time (5 seconds here). Each square on the map is one channel in one window.</dd>
+      <dt>Lost contact / flat line</dt><dd>The sensor stopped touching the skin, so the signal went dead flat.</dd>
+      <dt>Electrical hum</dt><dd>Interference from mains power or a bad connection. It looks like a thick, fuzzy band instead of a line.</dd>
+      <dt>Spikes and swings</dt><dd>Sudden jumps, usually from movement or a loose headband.</dd>
+      <dt>Rule</dt><dd>A condition you set, like “flag any window where the signal goes flat for more than half of it”.</dd>
+    </dl>
+  </details>
+</main>
 </div>
 <script type="module" src="src/app.js"></script>
 </body>

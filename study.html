@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Somnium · Check a study</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%276%27 fill=%27%23fbf1ef%27/%3E%3Cpath d=%27M2 17l4-1 3-8 4 17 4-14 3 9 3-4 5 1%27 fill=%27none%27 stroke=%27%23191a33%27 stroke-width=%272.4%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E">
+<meta name="description" content="See which study participants are wearing their sleep headband properly. Runs in your browser.">
+<link rel="stylesheet" href="style.css">
+<style>
+/* study page only: the shared sheet (style.css) belongs to both product pages */
+#summary h3{margin:18px 0 8px;font-size:14px;font-weight:650;color:var(--mute)}
+.mix{display:flex;gap:2px;height:14px;border-radius:4px;overflow:hidden;margin:14px 0 8px}
+.seg{min-width:6px}
+.mixkey{display:flex;flex-wrap:wrap;gap:4px 18px;margin:0;font-size:14px;color:var(--mute)}
+.mixkey i,.who i,tr.group i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:0}
+.usable{background:var(--pass)}.fix{background:var(--bad)}.no{background:var(--err)}.err{background:var(--mute)}
+.who{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:6px;background:var(--card);color:var(--text);border:1px solid var(--line);font-weight:500;padding:6px 8px;min-height:40px}
+.chip:hover:not(:disabled){background:var(--tint);border-color:#8d8380}
+.chip span{color:var(--mute);font-size:14px}
+tr.group th{padding:20px 10px 8px;border-bottom:0;color:var(--text);font-size:14px}
+tbody tr.group:first-child th{padding-top:12px}
+tbody tr:focus{outline:none}
+tr.flash{animation:flash 1.6s cubic-bezier(.16,1,.3,1)}
+@keyframes flash{from{background:var(--tint)}to{background:transparent}}
+.tell{padding:10px 12px;border:1px solid var(--line);border-radius:6px}
+.tell-label{display:block;font-size:12px;font-weight:650;color:var(--mute)}
+.tell q{display:block;margin:2px 0 0;font-size:15px}
+.tell q::before{content:"\201C"}.tell q::after{content:"\201D"}
+.timeline{width:100%;max-width:160px}
+#table th:nth-child(3),#table td:nth-child(3){min-width:9rem}
+td>div+.tell{margin-top:10px}
+/* which checklist grades the study */
+.rules-used{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 0 14px;padding:10px 12px;border:1px solid var(--line);border-radius:6px}
+.rules-used>span{flex:1 1 16rem}
+.rules-used .btn{margin:0}
+.rules-used .btn:focus-within{outline:2px solid var(--text);outline-offset:2px}
+.linkish{background:none;border:0;padding:0;color:inherit;text-decoration:underline;font:inherit;cursor:pointer}
+#rulesNote:empty{display:none}
+@media (prefers-reduced-motion:reduce){tr.flash{animation:none;background:var(--tint)}}
+@media (max-width:760px){
+  #table tr:not(.group){display:grid;grid-template-columns:1fr auto;column-gap:12px;align-items:start}
+  #table tr:not(.group)>td:nth-child(n+3){grid-column:1/-1}
+  #table td:nth-child(-n+2)::before{display:none}
+  #table td:nth-child(2){text-align:right}
+  #table tr.group{display:block;border:0;padding:0;margin:20px 0 8px}
+  #table tr.group th{display:block;padding:0}
+  .timeline{max-width:none}
+  #table td:nth-child(3){min-width:0}
+  .tell .small{width:100%;min-height:40px}
+}
+</style>
+</head>
+<body>
+<noscript><p>Somnium needs JavaScript to read recordings in your browser.</p></noscript>
+<header>
+  <h1><a href="./">Somnium</a></h1>
+  <nav class="tabs"><a href="app.html">Check one recording</a><a href="study.html" aria-current="page">Check a study</a></nav>
+</header>
+<main>
+  <section class="card">
+    <h2>Is everyone wearing the headband properly?</h2>
+    <p class="intro">Drop in the recordings from your participants, one file per night. You get one row per night: who’s fine, who needs a follow-up, what went wrong, and what to tell them. Nothing is uploaded; the files are read on your computer.</p>
+    <div class="rules-used">
+      <span id="rulesUsed"></span>
+      <label class="ghost btn small">Import checklist (.json)<input type="file" id="importRules" accept=".json,application/json" class="sr-only"></label>
+    </div>
+    <p id="rulesNote" class="hint" role="status"></p>
+    <label class="drop" id="drop">
+      <input type="file" id="files" accept=".edf,.EDF" multiple hidden>
+      <strong>Drop several EDF files</strong> or click to choose
+      <span>Name files like <code>P012_night1.edf</code> so the participant is clear.</span>
+    </label>
+    <button id="sample" class="ghost">Try a sample study (8 participants)</button>
+    <progress id="bar" max="1" value="0" hidden></progress>
+    <p id="progress" class="hint" role="status"></p>
+  </section>
+
+  <section id="results" hidden>
+    <div class="card" id="summary"></div>
+    <div class="card">
+      <div class="row-head">
+        <label class="check"><input type="checkbox" id="onlyBad"> <span>Only show follow-ups <span id="onlyBadCount" class="hint"></span></span></label>
+        <button id="csv" class="ghost">Download as spreadsheet (CSV)</button>
+      </div>
+      <div class="tablewrap">
+        <table id="table">
+          <thead><tr><th>Participant</th><th>Status</th><th>Clean signal</th><th>What happened</th><th>What to do</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="hint">“Worn properly” means the headband gave a clean signal for at least 75% of the night. 50–74% is “Check this one”. Below 50% is “Not worn properly”. These are the same cut-offs a 2026 home-sleep study used.</p>
+    </div>
+  </section>
+
+  <details class="card glossary">
+    <summary>What do these words mean?</summary>
+    <dl>
+      <dt>Clean signal</dt><dd>The share of the night when the headband was recording a usable brain signal.</dd>
+      <dt>Lost contact / flat line</dt><dd>The sensor stopped touching the skin, so the signal went dead flat.</dd>
+      <dt>Electrical hum</dt><dd>Interference from mains power or a bad connection. It looks like a thick, fuzzy band instead of a line.</dd>
+      <dt>Spikes and swings</dt><dd>Sudden jumps, usually from movement or a loose headband.</dd>
+      <dt>EDF file</dt><dd>The standard file format sleep and EEG devices export. Most headbands and sleep apps can export it.</dd>
+    </dl>
+  </details>
+</main>
+<script type="module" src="src/study.js"></script>
+</body>
+</html>

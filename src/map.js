@@ -18,15 +18,17 @@ export const CELL_MIN = 6;
 export const CELL_MAX = 15;
 export const MAX_PX = 16000; // conservative safe canvas side (all browsers)
 
-export function mapLayout(nWindows, nChannels, dpr = 1) {
+// budget: CSS px available for the grid (narrow screens pass less than MAP_W so the map fits without sideways scrolling).
+export function mapLayout(nWindows, nChannels, dpr = 1, budget = MAP_W) {
+  const W = Math.max(CELL_MIN, Math.min(MAP_W, Math.floor(budget) || MAP_W));
   const n = Math.max(0, Math.floor(nWindows) || 0);
   const ch = Math.max(1, Math.floor(nChannels) || 1);
 
   // How many columns can we afford at the minimum legible width?
-  const maxCols = Math.max(1, Math.floor(MAP_W / CELL_MIN));
+  const maxCols = Math.max(1, Math.floor(W / CELL_MIN));
   const step = Math.max(1, Math.ceil(n / maxCols)); // windows per column
   const cols = Math.ceil(n / step);                 // columns actually drawn
-  const cw = Math.max(CELL_MIN, Math.min(CELL_MAX, Math.floor(MAP_W / Math.max(cols, 1)) || CELL_MIN));
+  const cw = Math.max(CELL_MIN, Math.min(CELL_MAX, Math.floor(W / Math.max(cols, 1)) || CELL_MIN));
 
   const cssW = GUT + cols * cw;
   const cssH = TOP + ch * ROW;
