@@ -5,6 +5,8 @@ import { DEFAULT_CHECKLIST } from './rules.js';
 import { normalizeRules, readSaved, writeSaved, SAVED_KEY } from './checklists.js';
 import { analyzeNight, participantOf, toCsv, STATUS, dur, message, byParticipant, needsFollowUp } from './wear.js';
 import { makeStudy } from './demo.js';
+import { mountAccount } from './account.js';
+import { supabase } from './supabase.js';
 
 const WIN = 10; // seconds per window
 const $ = (id) => document.getElementById(id);
@@ -164,4 +166,5 @@ $('importRules').onchange = async (e) => {
 // another tab (app.html) changed the checklist
 addEventListener('storage', (e) => { if (e.key === null || e.key === SAVED_KEY) { checklist = readSaved(); drawRules('Your checklist changed in another tab.'); if (last) run(last); } });
 drawRules();
-if (new URLSearchParams(location.search).has('sample')) $('sample').click();
+// Gated like app.html; ?sample (kept through sign-in) runs the sample study.
+mountAccount(supabase, { onSignedIn: (intent) => { if (intent.has('sample')) $('sample').click(); } });

@@ -10,36 +10,77 @@
 </head>
 <body>
 <noscript><p>Somnium needs JavaScript to read recordings in your browser.</p></noscript>
-<header>
-  <h1><a href="./">Somnium</a></h1>
-  <nav class="tabs"><a href="app.html" aria-current="page">Check one recording</a><a href="study.html">Check a study</a></nav>
-  <p class="tag">Check an EEG recording you’ve collected. No experience needed: every result comes with a plain-English reason.</p>
-</header>
-<div class="shell">
-  <aside id="history" class="card" aria-labelledby="historyHeading">
-    <div class="row-head"><h2 id="historyHeading">Previous analyses</h2></div>
-    <div class="row">
-      <button id="saveAnalysis" type="button" disabled>Save analysis</button>
-      <button id="syncAnalyses" type="button" class="ghost" disabled title="Sync with your account">Sync</button>
+<section id="gate" class="gate" aria-labelledby="gateTitle">
+  <div class="card gate-card">
+    <h1 id="gateTitle"><a href="./">Somnium</a></h1>
+    <p class="gate-lead">Check EEG recordings in your browser and keep every analysis in your account. Sign in or create an account to open the app.</p>
+    <form id="authForm" hidden>
+      <label>Email<input id="email" type="email" autocomplete="email" required maxlength="254"></label>
+      <label>Password<input id="password" type="password" autocomplete="current-password" required maxlength="128"></label>
+      <button id="login" name="action" value="login">Sign in</button>
+      <div class="gate-alt">
+        <button id="signup" name="action" value="signup" class="ghost">Create account</button>
+        <button id="forgotPassword" name="action" value="reset" class="ghost">Send password reset</button>
+      </div>
+    </form>
+    <form id="recoveryForm" hidden>
+      <label>New password<input id="newPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label>
+      <button>Update password</button>
+    </form>
+    <p class="hint account-status" role="status" aria-live="polite">Checking your sign-in…</p>
+  </div>
+</section>
+<div id="appShell" class="shell" hidden>
+  <aside id="sidebar" class="sidebar">
+    <div class="side-head">
+      <a class="brand" href="./">Somnium</a>
+      <button id="sideToggle" type="button" class="ghost small side-toggle" aria-expanded="false" aria-controls="sideBody">Analyses</button>
     </div>
-    <label class="keep-recording"><input type="checkbox" id="keepRecording" checked> Keep the recording so it can be reopened</label>
-    <p class="hint" id="recordingLimit"></p>
-    <p class="hint" id="historyStatus" aria-live="polite">No analyses saved yet.</p>
-    <p class="hint" id="historyEmpty">Load a recording, then save it here to build your history.</p>
-    <ul id="historyList" hidden></ul>
+    <div id="sideBody" class="side-body">
+      <button id="newAnalysis" type="button" class="new-analysis">+ New analysis</button>
+      <nav id="history" class="side-list" aria-labelledby="historyHeading">
+        <h2 id="historyHeading" class="side-label">Your analyses</h2>
+        <ul id="historyList" hidden></ul>
+        <p class="hint" id="historyEmpty">Recordings you open are saved here.</p>
+        <p class="hint" id="historyStatus" aria-live="polite"></p>
+      </nav>
+      <div class="side-foot">
+        <label class="keep-recording"><input type="checkbox" id="keepRecording" checked> Keep the recording so it can be reopened</label>
+        <p class="hint" id="recordingLimit"></p>
+        <a class="side-link" href="study.html">Check a study →</a>
+        <details id="account" class="account-menu">
+          <summary><span class="sr-only">Account: </span><span id="accountEmail"></span></summary>
+          <div id="signedIn" class="row"><button id="signOut" type="button" class="ghost small">Sign out</button><button id="syncAnalyses" type="button" class="ghost small" title="Sync analyses with your account">Sync</button></div>
+          <div id="cloud" hidden>
+            <form id="saveForm"><label>Checklist name<input id="checklistName" maxlength="80" required placeholder="e.g. Sleep lab standard"></label><button id="saveChecklist" class="small">Save current checklist</button></form>
+            <label>Saved checklists<select id="savedChecklists"></select></label>
+            <div class="row"><button id="loadChecklist" type="button" class="ghost small">Load</button><button id="deleteChecklist" type="button" class="ghost small">Delete</button><button id="refreshChecklists" type="button" class="ghost small">Refresh</button></div>
+            <p class="hint">Each save is a private snapshot of your rules.</p>
+          </div>
+          <p class="hint account-status" role="status" aria-live="polite"></p>
+        </details>
+      </div>
+    </div>
   </aside>
 <main>
   <section id="load" class="card">
+    <h2>New analysis</h2>
+    <p class="hint load-tag">Check an EEG recording you’ve collected. No experience needed: every result comes with a plain-English reason.</p>
     <label class="drop" id="drop">
       <input type="file" id="file" accept=".edf,.EDF" class="sr-only">
       <strong>Drop an EDF recording</strong> or click to choose
-      <span>EEG recordings stay in your browser. Only checklists you save go to your account.</span>
+      <span>Analysis runs in your browser. The recording is stored privately in your account only if you keep it.</span>
     </label>
-    <div class="row load-row"><button id="demo" class="ghost">Try the demo recording</button><span id="loaded" class="hint" hidden></span></div>
+    <div class="row load-row"><button id="demo" class="ghost">Try the demo recording</button></div>
     <p id="error" role="alert"></p>
   </section>
 
   <section id="report" hidden>
+    <div class="analysis-bar">
+      <p id="loaded" class="analysis-title"></p>
+      <span class="row-tools"><button id="saveAnalysis" type="button" class="ghost small" hidden>Save to your analyses</button><button id="saveRules" type="button" class="ghost small" hidden>Save rules to this analysis</button></span>
+      <p id="analysisStatus" class="hint" aria-live="polite"></p>
+    </div>
     <div id="verdict" class="card" aria-live="polite">
       <p class="eyebrow">Verdict</p>
       <p class="verdict-line">This recording is <span id="verdictPill" class="pill"></span></p>
@@ -61,6 +102,7 @@
         <h2>Evidence</h2>
         <div id="evidence" aria-live="polite"></div>
         <canvas id="trace" height="120" role="img" aria-label="Raw signal for the selected square"></canvas>
+        <details id="numbers" class="ev-numbers" hidden><summary>Show the numbers</summary><div id="numbersBody"></div></details>
       </div>
 
       <section class="card" id="ruleBox" aria-labelledby="rulesHeading">
@@ -88,35 +130,22 @@
           <p id="pCount"></p>
           <div class="row"><button id="pAdd">Add rule</button><button id="pCancel" class="ghost">Cancel</button></div>
         </div>
+        <details id="tplBox" class="tpl">
+          <summary>Start from a template</summary>
+          <p class="hint">Pick a preset for your kind of recording and change any number. Applying it replaces the rules below.</p>
+          <label class="tpl-pick">Template <select id="tplPick"></select></label>
+          <p id="tplAbout" class="hint"></p>
+          <form id="tplForm" novalidate>
+            <ul id="tplRules"></ul>
+            <p id="tplCount" aria-live="polite"></p>
+            <button id="tplApply">Apply template</button>
+          </form>
+        </details>
         <h3>Applied now</h3>
         <ul id="checklist"></ul>
         <p class="hint"><a href="study.html">Apply these rules to a study →</a></p>
       </section>
     </div>
-  </section>
-  <section id="account" class="card" aria-labelledby="accountHeading">
-    <div class="row-head"><h2 id="accountHeading">Your account</h2><span class="hint">Optional: sign in to save your checks. Recordings never leave your computer.</span></div>
-    <form id="authForm" hidden>
-      <div class="row account-fields">
-        <label>Email<input id="email" type="email" autocomplete="email" required maxlength="254"></label>
-        <label>Password<input id="password" type="password" autocomplete="current-password" required maxlength="128"></label>
-      </div>
-      <div class="row">
-        <button id="login" name="action" value="login">Sign in</button>
-        <button id="signup" name="action" value="signup" class="ghost">Create account</button>
-        <button id="forgotPassword" name="action" value="reset" class="ghost">Send password reset</button>
-      </div>
-    </form>
-    <div id="signedIn" hidden><div class="row"><span id="accountEmail"></span><button id="signOut" class="ghost">Sign out</button></div></div>
-    <form id="recoveryForm" hidden>
-      <div class="row"><label>New password<input id="newPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label><button>Update password</button></div>
-    </form>
-    <div id="cloud" hidden>
-      <form id="saveForm" class="row"><label>Checklist name<input id="checklistName" maxlength="80" required placeholder="e.g. Sleep lab standard"></label><button id="saveChecklist">Save current checklist</button></form>
-      <div class="row"><label>Saved checklists<select id="savedChecklists"></select></label><button id="loadChecklist" class="ghost">Load</button><button id="deleteChecklist" class="ghost">Delete</button><button id="refreshChecklists" class="ghost">Refresh</button></div>
-      <p class="hint">Each save creates a private snapshot. Only rules and the checklist name are stored.</p>
-    </div>
-    <p id="accountStatus" class="hint" role="status" aria-live="polite">Connecting to your account…</p>
   </section>
   <details class="card glossary">
     <summary>What do these words mean?</summary>

@@ -12,13 +12,9 @@ body{margin:0;color:var(--text);font:16px/1.5 var(--sans);background:var(--bg)}
 header,main{max-width:1080px;margin:0 auto;padding:0 16px}
 header{padding-top:24px}
 main{padding-bottom:48px}
-/* app.html: the analysis gets the full width (the map needs it); previous analyses follow it. */
-.shell{max-width:1080px;margin:0 auto;padding:0 16px;display:flex;flex-direction:column}
-.shell>main{max-width:none;margin:0;padding:0;min-width:0}
 h1{margin:0;font-size:28px;line-height:1.1;font-weight:700;letter-spacing:-.02em}
 h1 a{color:inherit;text-decoration:none}
 h2{margin:0 0 10px;font-size:18px;line-height:1.3;font-weight:650}
-.tag{margin:8px 0 16px;color:var(--mute);max-width:46rem}
 .card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:20px;margin-bottom:16px}
 details.card>summary{cursor:pointer;font-weight:650;font-size:18px}
 details.card[open]>summary{margin-bottom:10px}
@@ -95,14 +91,9 @@ th:nth-child(2),td:nth-child(2){min-width:10.5rem}
 .glossary dt{font-weight:650;margin-top:10px}.glossary dd{margin:2px 0 0;color:var(--mute)}
 code{font-size:.9em;background:var(--tint);padding:1px 5px;border-radius:4px}
 
-/* account (optional, below the results) */
-#account label{display:flex;flex-direction:column;gap:4px;color:var(--mute);font-size:13px}
-#account input,#account select{font-size:15px;max-width:100%;color:var(--text)}
-#account .row{align-items:flex-end}
-#accountStatus.error{color:var(--err)}
-#accountEmail{overflow-wrap:anywhere;max-width:100%}
-#savedChecklists{min-width:220px;max-width:360px}
-@media(max-width:480px){.account-fields label,.account-fields input{width:100%}#savedChecklists{min-width:0;max-width:100%;width:100%}#cloud .row>label{width:100%}}
+/* account controls (app.html sidebar menu, study.html header) */
+.account-status.error{color:var(--err)}
+#accountEmail{overflow-wrap:anywhere;min-width:0}
 noscript p{padding:16px;border:1px solid var(--err);border-radius:8px;background:var(--card)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 
@@ -113,10 +104,7 @@ noscript p{padding:16px;border:1px solid var(--err);border-radius:8px;background
 #ruleBox h3{margin:18px 0 6px;font-size:15px;font-weight:650}
 .eyebrow{margin:0;font-size:12px;font-weight:650;letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
 .load-row{margin:12px 0 0}.load-row #demo{margin:0}
-#load.loaded{padding:12px 16px}
-#load.loaded .drop{padding:10px;border-width:1px;font-size:15px}
-#load.loaded .drop span{display:none}
-#loaded{margin:0}
+#load h2{margin-bottom:2px}.load-tag{margin:0 0 14px}
 
 #verdict{padding:20px 24px;transition:background-color .2s ease-out}
 #verdict[data-state="usable"]{background:var(--tint-ok);border-color:oklch(80% .06 185)}
@@ -164,23 +152,99 @@ noscript p{padding:16px;border:1px solid var(--err);border-radius:8px;background
 #checklist li button{margin:0;flex-shrink:0}
 @media(max-width:480px){.card{padding:16px}.verdict-line{font-size:22px}.verdict-line .pill{font-size:19px}#teach{width:100%}}
 
-/* ---- previous analyses ----
-   Built from the app's existing pieces: a normal .card, the same h2/.row/.hint/.ghost
-   button language, and #checklist-style list rows. */
-#history{order:1;margin-bottom:48px}
-#history .row{margin:10px 0 0}
-#historyList{list-style:none;margin:8px 0 0;padding:0}
-#historyList li{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--line)}
-#historyList li:first-child{border-top:0}
+/* ---- sign-in gate (app.html, study.html): nothing else shows until there is a session ---- */
+.gate{min-height:100vh;display:grid;place-items:center;padding:24px 16px}
+.gate-card{width:100%;max-width:400px;margin:0;padding:28px 24px}
+.gate-card h1{margin-bottom:8px}
+.gate-lead{margin:0 0 20px;color:var(--mute)}
+#authForm,#recoveryForm{display:flex;flex-direction:column;gap:12px}
+.gate label{display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--mute)}
+.gate input{width:100%;color:var(--text)}
+.gate-alt{display:flex;flex-wrap:wrap;gap:8px}.gate-alt button{flex:1 1 auto}
+.gate .account-status{margin:16px 0 0}.gate .account-status:empty{display:none}
+
+/* ---- app shell (app.html): analyses sidebar + main pane ---- */
+.shell{display:grid;grid-template-columns:272px minmax(0,1fr);min-height:100vh}
+.shell>main{max-width:1080px;width:100%;margin:0 auto;padding:24px 24px 48px;min-width:0}
+.sidebar{position:sticky;top:0;height:100vh;overflow-y:auto;display:flex;flex-direction:column;gap:12px;padding:16px 12px;background:var(--card);border-right:1px solid var(--line)}
+.side-head{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:0 4px}
+.brand{font-size:20px;font-weight:700;letter-spacing:-.02em;color:inherit;text-decoration:none}
+.side-toggle{display:none}button.side-toggle{margin:0}
+.side-body{display:flex;flex-direction:column;gap:12px;flex:1;min-height:0}
+.new-analysis{width:100%;text-align:left}
+.side-label{margin:6px 4px 4px;font-size:12px;font-weight:650;letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
+#historyList{list-style:none;margin:0;padding:0}
+#historyList li{display:flex;align-items:center;gap:2px;border-radius:6px}
+#historyList li:hover{background:var(--bg)}
+#historyList li.active{background:var(--tint)}
 .history-open{flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:1px;
-  background:none;border:0;border-radius:0;padding:0;color:inherit;font:inherit;text-align:left;cursor:pointer}
-.history-open:hover:not(:disabled){transform:none}
-.history-open:hover .history-name{text-decoration:underline}
-.history-name{font-weight:600;overflow-wrap:anywhere}
-.history-open .hint{margin:0}
-.history-remove{flex:none;padding:5px 12px;font-size:13px}
-.keep-recording{display:flex;align-items:flex-start;gap:8px;margin:10px 0 0;color:var(--mute);font-size:14px;line-height:1.4}
+  background:none;border:0;border-radius:6px;padding:8px;color:inherit;font:inherit;text-align:left;cursor:pointer}
+button.history-open:hover:not(:disabled){background:none}
+.history-name{max-width:100%;font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.history-open .hint{margin:0;font-size:13px}
+button.history-remove{flex:none;width:32px;height:32px;padding:0;border:0;font-size:18px;line-height:1;color:var(--mute);opacity:0}
+#historyList li:hover .history-remove,#historyList li.active .history-remove,.history-remove:focus-visible{opacity:1}
+@media (hover:none){button.history-remove{opacity:1}}
+#historyEmpty,#historyStatus{margin:0 4px}#historyStatus:empty{display:none}
+.side-foot{margin-top:auto;display:flex;flex-direction:column;gap:8px;padding:12px 4px 0;border-top:1px solid var(--line)}
+.keep-recording{display:flex;align-items:flex-start;gap:8px;color:var(--mute);font-size:14px;line-height:1.4}
 .keep-recording input{margin:3px 0 0;accent-color:var(--accent)}
-#recordingLimit{margin:4px 0 0}
-#historyStatus{margin:10px 0 0}
-#historyEmpty{margin:0}
+#recordingLimit{margin:0;font-size:13px}
+.side-link{font-size:14px;font-weight:550}
+.account-menu>summary{cursor:pointer;font-size:14px;font-weight:600;padding:6px 0}
+.account-menu .row{margin:6px 0}.account-menu button.small{margin:0}
+.account-menu label{display:flex;flex-direction:column;gap:4px;margin:8px 0 0;font-size:13px;color:var(--mute)}
+.account-menu input,.account-menu select{width:100%;font-size:15px;color:var(--text)}
+#saveForm button{margin-top:8px}
+.account-menu .account-status{margin:6px 0 0}.account-menu .account-status:empty{display:none}
+
+/* the open analysis: its name and the save actions above the verdict */
+.analysis-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 12px;margin:0 0 12px}
+.analysis-title{margin:0;font-weight:600;overflow-wrap:anywhere;min-width:0}
+.analysis-bar .row-tools button{margin:0}
+#analysisStatus{flex-basis:100%;margin:0}#analysisStatus:empty{display:none}
+#analysisStatus.error,#historyStatus.error{color:var(--err)}
+
+@media (max-width:760px){
+  .shell{grid-template-columns:minmax(0,1fr)}
+  .sidebar{z-index:5;height:auto;max-height:100vh;padding:10px 16px;border-right:0;border-bottom:1px solid var(--line)}
+  .side-toggle{display:inline-block}
+  .side-body{display:none}
+  .sidebar.open .side-body{display:flex;padding-bottom:6px}
+  .shell>main{padding:16px 16px 48px}
+}
+
+/* study.html header account line */
+.study-account{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:8px;font-size:14px;color:var(--mute)}
+.study-account button.small{margin:0}
+
+/* ---- simple evidence + templates ---- */
+#evidence .ev-title{margin:0 0 8px;font-size:14px;font-weight:600;color:var(--mute)}
+#evidence .ev-title .badge{font-size:13px;color:var(--text)}
+#evidence .ev-lead{margin:0 0 12px;padding:0;font-size:20px;line-height:1.35;font-weight:650;letter-spacing:-.01em;list-style:none}
+#evidence ul.ev-lead li+li{margin-top:6px}
+#evidence ul.ev-lead li::before{content:"• ";color:var(--mute)}
+#evidence .ev-do-head{margin:0 0 2px;font-size:12px;font-weight:650;letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
+#evidence .ev-do{margin:0 0 8px;padding-left:0;list-style:none}
+#evidence ul.ev-do li+li{margin-top:4px}
+.ev-numbers{margin-top:10px;font-size:14px}
+.ev-numbers>summary{cursor:pointer;color:var(--accent);font-weight:600}
+.ev-numbers[open]>summary{margin-bottom:8px}
+.ev-numbers .tech{margin:0 0 6px}
+@media(max-width:480px){#evidence .ev-lead{font-size:18px}}
+
+.tpl{margin:14px 0 0;padding:10px 14px;border:1px solid var(--line);border-radius:6px}
+.tpl>summary{cursor:pointer;font-weight:650}
+.tpl[open]>summary{margin-bottom:6px}
+.tpl-pick{display:flex;flex-direction:column;gap:4px;margin:8px 0 0;font-size:13px;color:var(--mute)}
+.tpl-pick select{max-width:100%;font-size:15px;color:var(--text)}
+#tplAbout{margin:6px 0 4px}
+#tplRules{list-style:none;margin:0;padding:0}
+#tplRules li{padding:8px 0;border-top:1px solid var(--line);font-size:15px}
+#tplRules li:first-child{border-top:0}
+#tplRules input{width:6.5rem;padding:4px 8px;margin:0 2px;font-variant-numeric:tabular-nums}
+#tplRules input[aria-invalid="true"]{border-color:var(--err);outline:1px solid var(--err)}
+.tpl-err{display:block;color:var(--err);font-size:13px}
+.tpl-err:empty{display:none}
+#tplCount{margin:8px 0;font-size:15px}
+.tpl-num{white-space:nowrap}
