@@ -16,6 +16,11 @@ The meta part: you write the quality rules yourself, three ways, and save them a
 EEG parsing and analysis run in the browser; recordings are never uploaded.
 Supabase handles accounts, private checklist snapshots and private analysis metadata.
 
+## Who it's for
+
+- **Study coordinators** (for example an insomnia study with home sleep headbands): `study.html` takes one EDF per participant-night and shows who is wearing the headband properly, what went wrong in plain words, and what to tell them. Export the table as CSV.
+- **Hobby and first-time researchers**: `app.html` checks a single recording. Every result has a plain-English reason, and there is a glossary instead of jargon.
+
 ## Run
 
 ```

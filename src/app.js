@@ -75,8 +75,13 @@ function drawMap() {
   S.flags.forEach((f) => { const k = `${f.ch}:${colOf(f.win)}`; count.set(k, (count.get(k) || 0) + 1); });
   g.font = '12px system-ui'; g.fillStyle = css('--mute'); g.textBaseline = 'middle';
   S.edf.labels.forEach((l, i) => g.fillText(l.slice(0, 6), 2, TOP + i * ROW + ROW / 2));
-  const every = Math.max(1, Math.ceil(40 / cw)); // keep time labels apart
-  for (let col = 0; col < S.cols; col += every) g.fillText(hhmm(col * S.step * WIN), GUT + col * cw, 8);
+  // time labels at whole-minute intervals, at least 56px apart, so they never repeat
+  const secPerCol = S.step * WIN;
+  const gap = [60, 120, 300, 600, 900, 1800, 3600, 7200].find((t) => (t / secPerCol) * cw >= 56) || 7200;
+  for (let col = 0; col < S.cols; col++) {
+    const t = col * secPerCol;
+    if (col === 0 || Math.floor(t / gap) !== Math.floor((t - secPerCol) / gap)) g.fillText(hhmm(Math.floor(t / gap) * gap), GUT + col * cw, 8);
+  }
   for (let ch = 0; ch < S.by.length; ch++) for (let col = 0; col < S.cols; col++) {
     const key = `${ch}:${col}`, x = GUT + col * cw, y = TOP + ch * ROW;
     g.fillStyle = count.has(key) ? css('--bad') : css('--ok');
@@ -92,15 +97,16 @@ function drawMap() {
 function drawEvidence() {
   const box = $('evidence'), t = $('trace').getContext('2d');
   t.clearRect(0, 0, 9999, 9999);
+  $('trace').hidden = !S.cell; // no empty box before something is selected
   if (!S.cell) return box.replaceChildren(Object.assign(document.createElement('p'), { className: 'hint', textContent: 'Select a cell on the map.' }));
   const { ch, win } = S.cell, hits = S.flags.filter((f) => f.ch === ch && f.win === win);
-  const lines = hits.length ? hits.map((f) => explain(f, S.edf.labels, WIN)) : [`${S.edf.labels[ch]}: no rule flagged this cell.`];
+  const lines = hits.length ? hits.flatMap((f) => [explain(f, S.edf.labels, WIN), { simple: METRICS[f.rule.metric].simple }]) : [`${S.edf.labels[ch]}: no rule flagged this cell. Everything looks normal here.`];
   if (S.step > 1) {
     lines.push(`This cell covers ${S.step} windows (${mmss(win * WIN)}–${mmss((win + S.step) * WIN)}); the trace shows one window.`);
   }
   const m = S.by[ch][win];
   lines.push('Metrics: ' + Object.keys(METRICS).map((k) => `${METRICS[k].label} ${fmt(k, m[k])}`).join(' · '));
-  box.replaceChildren(...lines.map((l) => Object.assign(document.createElement('p'), { textContent: l })));
+  box.replaceChildren(...lines.map((l) => Object.assign(document.createElement('p'), typeof l === 'string' ? { textContent: l } : { className: 'simple', textContent: `In plain words: ${l.simple}` })));
   const fs = S.edf.rates[ch], x = S.edf.signals[ch].subarray(win * WIN * fs, (win + 1) * WIN * fs);
   const c = $('trace'); c.width = c.clientWidth * (devicePixelRatio || 1);
   const g = c.getContext('2d'), mx = Math.max(...x.map(Math.abs), 1);
@@ -137,7 +143,7 @@ $('map').onpointerdown = (e) => { anchor = hit(e); if (anchor) $('map').setPoint
 $('map').onpointermove = (e) => {
   const h = anchor && hit(e); if (!h) return;
   S.sel = { ch0: Math.min(anchor.ch, h.ch), ch1: Math.max(anchor.ch, h.ch), col0: Math.min(anchor.col, h.col), col1: Math.max(anchor.col, h.col) };
-  S.cell = null; $('teach').disabled = false; $('teachHint').textContent = 'Region selected. Click “Teach from selection”.';
+  S.cell = null; $('teach').disabled = false; $('ruleBox').open = true; $('teachHint').textContent = 'Region selected. Click “Teach from selection”.';
   drawMap(); drawEvidence();
 };
 $('map').onpointerup = (e) => {
