@@ -118,6 +118,21 @@ test('an analysis saved in one browser can be reopened from the account in anoth
   await other.close();
 });
 
+test('the sidebar stays pinned while the report scrolls past', async ({ page }) => {
+  await mockBackend(page);
+  await page.goto('/app.html?demo');
+  await login(page);
+  await saveBtn(page).click();
+  await expect(rows(page)).toHaveCount(1);
+  await expect(page.locator('#sidebar')).toHaveCSS('position', 'sticky');
+  await page.evaluate(() => window.scrollTo(0, 1500));
+  await page.waitForTimeout(150);
+  // The report has scrolled away, but the analyses list is still on screen.
+  expect(await page.locator('#mapwrap').evaluate((el) => el.getBoundingClientRect().top)).toBeLessThan(0);
+  expect(await page.locator('#sidebar').evaluate((el) => el.getBoundingClientRect().top)).toBe(0);
+  await expect(rows(page)).toBeInViewport();
+});
+
 test('phone layout: sidebar collapses to a drawer and nothing overflows', async ({ page }) => {
   await mockBackend(page);
   await page.setViewportSize({ width: 375, height: 812 });

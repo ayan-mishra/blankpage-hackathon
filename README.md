@@ -77,7 +77,9 @@ recording itself are stored.
 ### Previous analyses and stored recordings
 
 The sidebar keeps analyses in IndexedDB, so saving, listing and reopening all work
-signed out and offline. A saved analysis records the filename, date, length, channel
+signed out and offline. On a wide screen it stays pinned as the report scrolls, and
+scrolls internally if the list outgrows the window; on a phone it stacks above the
+report and scrolls normally. A saved analysis records the filename, date, length, channel
 count, sample rate, the checklist it was scored with, and whether a recording is kept.
 
 Opening one restores the recording **and** the checklist, so the verdict is reproducible
