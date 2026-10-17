@@ -28,6 +28,7 @@ No build step. Click "Try the demo recording" for a synthetic file with three kn
 | `src/edf.js` | 16-bit EDF parser |
 | `src/metrics.js` | per-window flatline, peak-to-peak, kurtosis, 50/60 Hz share |
 | `src/rules.js` | rules as plain data over those metrics, plain-language parser, "show it" proposal, verdict |
+| `src/map.js` | map geometry: windows → grid columns, and the canvas pixel budget |
 | `src/app.js` | UI |
 
 Rules are data over five documented metrics, never generated code, so every flag can be inspected.
@@ -35,6 +36,7 @@ Rules are data over five documented metrics, never generated code, so every flag
 ## Limits (MVP)
 
 - 16-bit EDF only (no BDF/FIF yet); metrics are per channel, no cross-channel checks.
+- The recording map gets a fixed pixel budget, so a long recording aggregates windows into columns (one column ≈ 3 min of a full night, `src/map.js`). Clicking a column inspects the earliest flagged window in it. Zooming into per-window detail is on the roadmap.
 - Plain-language parsing uses templates; an LLM translation step is the planned upgrade.
 - "Show it" thresholds are proposals from few examples. Check the preview before adding.
 - Not validated against PREP/PyPREP yet, and not for clinical use.
